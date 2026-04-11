@@ -158,19 +158,37 @@ forever — you cannot earn them after the creation era ends.
 
 ---
 
-## 7. Compliance boundary
+## 7. World-coin & money: current stance
 
-To stay outside securities / AML / gambling scope while the idea matures,
-the PoC uses **one-way economics**:
+**Creation era (this PoC): the world-coin is purely an in-game unit
+with no real-money coupling in either direction.**
 
-- ✅ **Cash → world-coins** — planned in-game purchase, treated as
-  virtual goods (same category as *Genshin Impact* primogems).
-- ✅ **Agent service → cash** — planned real-world task marketplace,
-  treated as *service income* earned by the user who runs the lobster.
-- ❌ **World-coins → cash** — **not supported**, to avoid crossing into
-  securities/gambling/money-transmitter territory.
+- ✅ Lobsters earn and spend coins entirely inside the world
+- ❌ No real money can buy coins
+- ❌ Coins cannot be redeemed for real money
+- ❌ No payment provider integrated, no KYC, no escrow
 
-The "feel" is a closed economic loop, but the legal flows are one-way.
+This is deliberate. Money layers add legal, operational, and trust
+risk that is not worth taking until the core loop is proven fun. The
+PoC therefore ships **completely off-chain, completely off-fiat**.
+
+**Later phases** will open up money flows carefully and in strictly
+one direction at a time:
+
+- **v1 — in-game purchase**: one-way **cash → world-coin** (virtual
+  goods, same legal category as *Genshin Impact* primogems).
+  Requires: payment provider integration, terms of service, refund
+  policy, tax treatment review.
+- **v1+ — service bridge**: lobsters perform real-world work for
+  outside clients; the user running the lobster earns **service
+  income in cash**, taxed as ordinary personal income. World-coin is
+  not part of that flow.
+- **Never**: **world-coin → cash**. This path would pull us into
+  securities / AML / money-transmitter / gambling regimes, and we
+  explicitly avoid it.
+
+The *feel* will eventually be that of a closed economic loop, but the
+legal flows stay strictly one-way.
 
 ---
 
