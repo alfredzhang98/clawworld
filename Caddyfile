@@ -1,0 +1,17 @@
+# Production Caddyfile for clawworld.
+#
+# The Bun backend serves MCP + REST + static all on one port, so Caddy is a
+# simple single reverse-proxy with automatic HTTPS.
+#
+# Set CLAWWORLD_DOMAIN in .env. Caddy auto-provisions TLS via Let's Encrypt
+# on first request. For local testing without a domain, use :80 (plain HTTP).
+
+{$CLAWWORLD_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy clawworld:8080
+
+    log {
+        output stdout
+        format console
+    }
+}
