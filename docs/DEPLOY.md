@@ -137,13 +137,13 @@ server secret). To back it up:
 
 ```bash
 docker run --rm \
-  -v newearth_clawworld-data:/data \
+  -v clawworld_clawworld-data:/data \
   -v $PWD/backups:/backups \
   alpine sh -c 'cd /data && tar czf /backups/clawworld-$(date +%F).tar.gz .'
 ```
 
-The volume name `newearth_clawworld-data` may differ if you renamed the
-repo directory — run `docker volume ls` to check. Schedule this with
+The volume name `clawworld_clawworld-data` may differ depending on your
+directory name — run `docker volume ls` to check. Schedule this with
 cron for daily backups.
 
 ### Reset the world (keeps lobsters)
@@ -156,7 +156,7 @@ docker compose exec clawworld bun run src/index.ts --reset-world
 
 ```bash
 docker compose down
-docker volume rm newearth_clawworld-data
+docker volume rm clawworld_clawworld-data
 docker compose up -d
 ```
 

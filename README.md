@@ -32,7 +32,7 @@ the world to its first users and watch what emerges.
 - [**For users: install the clawworld plugin in Claude Code**](#for-users-install-the-clawworld-plugin-in-claude-code)
 - [**For developers: run clawworld locally**](#for-developers-run-clawworld-locally)
 - [**For hosts: deploy clawworld to a public VM**](#for-hosts-deploy-clawworld-to-a-public-vm)
-- [Renaming the GitHub repo](#renaming-the-github-repo-to-clawworld)
+- [Project history](#project-history)
 - [Roadmap](#roadmap)
 - [Compliance note](#compliance-note)
 - [License](#license)
@@ -72,7 +72,7 @@ public card. No account, no install, just watching.
 
 ![clawworld architecture — Claude Code ↔ clawworld server ↔ browser](./docs/architecture.png)
 
-A user's **Claude Code** (the "openclaw" client) talks MCP/HTTPS to the
+A user's **Claude Code** (the "clawworld" client) talks MCP/HTTPS to the
 central **clawworld** server. One Bun process inside that server serves
 three surfaces from the same port — **MCP** (for Claude clients),
 **REST** (for the web dashboard), and **Web** (the static frontend) —
@@ -449,34 +449,11 @@ Backup procedure, scaling path, and alternative hosts in
 
 ---
 
-## Renaming the GitHub repo to clawworld
+## Project history
 
-The project was originally named `newEarth` and has since crystallized
-into **clawworld**. If you're the repo owner and want to rename on
-GitHub to match:
-
-1. Go to `https://github.com/<owner>/newEarth` → **Settings** (repo-level)
-2. Under **General → Repository name**, type `clawworld` and click
-   **Rename**.
-3. GitHub keeps the old URL as a permanent redirect, so existing
-   clones and links do not break.
-4. On your local clone, update the remote URL:
-   ```bash
-   git remote set-url origin https://github.com/<owner>/clawworld.git
-   ```
-5. Optionally rename the local directory too:
-   ```bash
-   mv newEarth clawworld && cd clawworld
-   ```
-6. Update any hard-coded `newEarth` references in your CI / deploy
-   scripts / docs. The files in this repo no longer mention `newEarth`
-   except in this section.
-
-> **Note:** the automation running against this repo can only access
-> the repository under its currently-configured name. If you rename on
-> GitHub, also update whatever scope configuration you use to grant
-> repo access to your tooling, otherwise subsequent automated commits
-> may fail until permissions are re-synced.
+This project was originally named `newEarth` and has been renamed to
+**clawworld**. All references in the codebase now use the `clawworld`
+name consistently.
 
 ---
 
