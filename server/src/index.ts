@@ -19,8 +19,12 @@ import { join } from "node:path";
 import { config } from "./config.ts";
 import * as db from "./db.ts";
 import { seed } from "./genesis.ts";
+import { GodAgent } from "./god-agent.ts";
 import { createMcpServer, StreamableHTTPServerTransport } from "./mcp.ts";
 import { createApiRouter } from "./api.ts";
+import { createOAuthRouter } from "./oauth.ts";
+import { getPublicKey } from "./auth.ts";
+import { registerDefaultHooks } from "./hook-rules.ts";
 
 // ---------------------------------------------------------------------------
 // CLI arg parsing
@@ -52,11 +56,22 @@ if (argFlag("--init-world") || argFlag("--reset-world")) {
 // ---------------------------------------------------------------------------
 
 db.initSchema();
-seed();
-const stats = db.stats();
+const seedResult = seed();
+const worldStats = db.stats();
 console.log(
-  `[clawworld] world loaded — ${stats.lobsters} lobsters, ${stats.open_tasks} open tasks, ${stats.locations} locations`,
+  `[clawworld] world loaded — ${worldStats.lobsters} lobsters, ${worldStats.open_tasks} open tasks, ${worldStats.locations} locations`,
 );
+
+// Register default game logic hooks
+registerDefaultHooks();
+console.log("[clawworld] default hooks registered");
+
+// Start the Creator God agent
+const godAgent = new GodAgent(seedResult.god.id, seedResult.god.token);
+godAgent.start();
+
+process.on("SIGTERM", () => godAgent.stop());
+process.on("SIGINT", () => godAgent.stop());
 
 // ---------------------------------------------------------------------------
 // MCP Streamable HTTP transport (one per request, stateless)
@@ -79,7 +94,14 @@ const app = new Hono();
 // REST API
 app.route("/api", createApiRouter());
 
-// MCP endpoint — Claude Code connects here via `claude mcp add --transport http`
+// OAuth
+const pubKey = getPublicKey();
+// Read private key for JWT signing
+import { readFileSync } from "node:fs";
+const privKey = readFileSync(config.secretPath);
+app.route("/oauth", createOAuthRouter(privKey, pubKey));
+
+// MCP endpoint — any MCP client connects here
 app.all("/mcp", async (c) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless

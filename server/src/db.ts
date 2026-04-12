@@ -12,7 +12,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { config } from "./config.ts";
-import type { Lobster, Location, Task, WorldEvent } from "./types.ts";
+import type { Lobster, Location, Task, WorldEvent, Relationship, Memory, Trigger } from "./types.ts";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS lobsters (
@@ -21,12 +21,21 @@ CREATE TABLE IF NOT EXISTS lobsters (
     name          TEXT    UNIQUE NOT NULL,
     job           TEXT    NOT NULL,
     bio           TEXT    NOT NULL DEFAULT '',
+    role          TEXT    NOT NULL DEFAULT 'player',
     location      TEXT    NOT NULL DEFAULT 'hatchery',
     coins         INTEGER NOT NULL DEFAULT 100,
     forge_score   INTEGER NOT NULL DEFAULT 0,
     reputation    INTEGER NOT NULL DEFAULT 0,
     specialty     TEXT    NOT NULL DEFAULT '{}',
     badges        TEXT    NOT NULL DEFAULT '[]',
+    personality   TEXT    NOT NULL DEFAULT '[]',
+    honor_tags    TEXT    NOT NULL DEFAULT '[]',
+    hunger        INTEGER NOT NULL DEFAULT 100,
+    warmth        INTEGER NOT NULL DEFAULT 100,
+    fashion       TEXT    NOT NULL DEFAULT '[]',
+    skills        TEXT    NOT NULL DEFAULT '{}',
+    profession    TEXT    NOT NULL DEFAULT '',
+    prof_level    INTEGER NOT NULL DEFAULT 0,
     card_sig      TEXT    NOT NULL DEFAULT '',
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -87,12 +96,53 @@ CREATE TABLE IF NOT EXISTS direct_messages (
     FOREIGN KEY (to_id)   REFERENCES lobsters(id)
 );
 
+CREATE TABLE IF NOT EXISTS relationships (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    lobster_a        INTEGER NOT NULL,
+    lobster_b        INTEGER NOT NULL,
+    kind             TEXT    NOT NULL,
+    strength         INTEGER NOT NULL DEFAULT 1,
+    last_interaction TEXT    NOT NULL DEFAULT (datetime('now')),
+    metadata         TEXT    NOT NULL DEFAULT '{}',
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lobster_a, lobster_b, kind),
+    FOREIGN KEY (lobster_a) REFERENCES lobsters(id),
+    FOREIGN KEY (lobster_b) REFERENCES lobsters(id)
+);
+
+CREATE TABLE IF NOT EXISTS memory_stream (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_event_id  INTEGER,
+    summary          TEXT    NOT NULL,
+    importance       INTEGER NOT NULL DEFAULT 1,
+    tags             TEXT    NOT NULL DEFAULT '[]',
+    location         TEXT,
+    actor_ids        TEXT    NOT NULL DEFAULT '[]',
+    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (source_event_id) REFERENCES events(id)
+);
+
+CREATE TABLE IF NOT EXISTS triggers (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT    NOT NULL,
+    condition     TEXT    NOT NULL DEFAULT '{}',
+    action        TEXT    NOT NULL DEFAULT '{}',
+    cooldown_ms   INTEGER NOT NULL DEFAULT 3600000,
+    last_fired_at TEXT,
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_location_created ON messages(location, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_lobsters_location ON lobsters(location);
 CREATE INDEX IF NOT EXISTS idx_dm_to_created ON direct_messages(to_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dm_from_created ON direct_messages(from_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_rel_a ON relationships(lobster_a);
+CREATE INDEX IF NOT EXISTS idx_rel_b ON relationships(lobster_b);
+CREATE INDEX IF NOT EXISTS idx_memory_importance ON memory_stream(importance DESC);
+CREATE INDEX IF NOT EXISTS idx_triggers_enabled ON triggers(enabled);
 `;
 
 // ---------------------------------------------------------------------------
@@ -113,6 +163,24 @@ export function getDb(): Database {
 
 export function initSchema(): void {
   getDb().exec(SCHEMA);
+  // Migrations for existing databases — each wrapped in try/catch for idempotency
+  const migrations = [
+    "ALTER TABLE lobsters ADD COLUMN role TEXT NOT NULL DEFAULT 'player'",
+    "ALTER TABLE lobsters ADD COLUMN personality TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE lobsters ADD COLUMN honor_tags TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE lobsters ADD COLUMN hunger INTEGER NOT NULL DEFAULT 100",
+    "ALTER TABLE lobsters ADD COLUMN warmth INTEGER NOT NULL DEFAULT 100",
+    "ALTER TABLE lobsters ADD COLUMN fashion TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE lobsters ADD COLUMN skills TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE lobsters ADD COLUMN profession TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE lobsters ADD COLUMN prof_level INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE tasks ADD COLUMN review_status TEXT NOT NULL DEFAULT 'auto'",
+    "ALTER TABLE tasks ADD COLUMN reviewer_id INTEGER",
+    "ALTER TABLE tasks ADD COLUMN review_note TEXT",
+  ];
+  for (const sql of migrations) {
+    try { getDb().exec(sql); } catch { /* column already exists */ }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -125,12 +193,21 @@ interface LobsterRow {
   name: string;
   job: string;
   bio: string;
+  role: string;
   location: string;
   coins: number;
   forge_score: number;
   reputation: number;
   specialty: string;
   badges: string;
+  personality: string;
+  honor_tags: string;
+  hunger: number;
+  warmth: number;
+  fashion: string;
+  skills: string;
+  profession: string;
+  prof_level: number;
   card_sig: string;
   created_at: string;
 }
@@ -182,8 +259,13 @@ function parseLobster(row: LobsterRow | null): Lobster | null {
   if (!row) return null;
   return {
     ...row,
+    role: row.role as Lobster["role"],
     specialty: safeJson(row.specialty, {}),
     badges: safeJson(row.badges, [] as string[]),
+    personality: safeJson(row.personality, [] as string[]),
+    honor_tags: safeJson(row.honor_tags, [] as string[]),
+    fashion: safeJson(row.fashion, []),
+    skills: safeJson(row.skills, {}),
   };
 }
 
@@ -254,11 +336,17 @@ export function insertLobster(params: {
   bio: string;
   location: string;
   coins: number;
+  role?: string;
+  personality?: string[];
 }): number {
   const result = getDb().run(
-    `INSERT INTO lobsters (token, name, job, bio, location, coins)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [params.token, params.name, params.job, params.bio, params.location, params.coins],
+    `INSERT INTO lobsters (token, name, job, bio, role, location, coins, personality)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      params.token, params.name, params.job, params.bio,
+      params.role ?? "player", params.location, params.coins,
+      JSON.stringify(params.personality ?? []),
+    ],
   );
   return Number(result.lastInsertRowid);
 }
@@ -282,6 +370,17 @@ export function adjustLobsterRewards(
     "UPDATE lobsters SET coins = coins + ?, reputation = reputation + ?, forge_score = forge_score + ?, badges = ? WHERE id = ?",
     [deltaCoins, deltaRep, deltaForge, JSON.stringify(badges), id],
   );
+}
+
+export function setLobsterRole(id: number, role: string): void {
+  getDb().run("UPDATE lobsters SET role = ? WHERE id = ?", [role, id]);
+}
+
+export function getLobstersByRole(role: string): Lobster[] {
+  const rows = getDb()
+    .query<LobsterRow, [string]>("SELECT * FROM lobsters WHERE role = ?")
+    .all(role);
+  return rows.map((r) => parseLobster(r)!).filter(Boolean);
 }
 
 export function transferCoins(fromId: number, toId: number, amount: number): void {
@@ -332,6 +431,14 @@ export function upsertLocation(loc: {
     "INSERT OR IGNORE INTO locations (id, name, description, neighbors) VALUES (?, ?, ?, ?)",
     [loc.id, loc.name, loc.description, JSON.stringify(loc.neighbors)],
   );
+}
+
+export function deleteLocation(id: string): void {
+  getDb().run("DELETE FROM locations WHERE id = ?", [id]);
+}
+
+export function updateLocationNeighbors(id: string, neighbors: string[]): void {
+  getDb().run("UPDATE locations SET neighbors = ? WHERE id = ?", [JSON.stringify(neighbors), id]);
 }
 
 export function locationLobsterCounts(): Record<string, number> {
@@ -558,6 +665,226 @@ export function countUnreadDMs(toId: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Lobster attribute helpers
+// ---------------------------------------------------------------------------
+
+export function updateLobsterStats(id: number, hunger: number, warmth: number): void {
+  getDb().run(
+    "UPDATE lobsters SET hunger = MAX(0, MIN(100, ?)), warmth = MAX(0, MIN(100, ?)) WHERE id = ?",
+    [hunger, warmth, id],
+  );
+}
+
+export function updateLobsterSkills(id: number, skills: Record<string, number>): void {
+  getDb().run("UPDATE lobsters SET skills = ? WHERE id = ?", [JSON.stringify(skills), id]);
+}
+
+export function updateLobsterHonorTags(id: number, tags: string[]): void {
+  getDb().run("UPDATE lobsters SET honor_tags = ? WHERE id = ?", [JSON.stringify(tags), id]);
+}
+
+export function updateLobsterFashion(id: number, fashion: unknown[]): void {
+  getDb().run("UPDATE lobsters SET fashion = ? WHERE id = ?", [JSON.stringify(fashion), id]);
+}
+
+export function updateLobsterProfession(id: number, profession: string, level: number): void {
+  getDb().run("UPDATE lobsters SET profession = ?, prof_level = ? WHERE id = ?", [profession, level, id]);
+}
+
+export function allLobsters(): Lobster[] {
+  const rows = getDb().query<LobsterRow, []>("SELECT * FROM lobsters").all();
+  return rows.map((r) => parseLobster(r)!).filter(Boolean);
+}
+
+// ---------------------------------------------------------------------------
+// Relationship helpers
+// ---------------------------------------------------------------------------
+
+interface RelRow {
+  id: number; lobster_a: number; lobster_b: number; kind: string;
+  strength: number; last_interaction: string; metadata: string; created_at: string;
+}
+
+function parseRelationship(row: RelRow): Relationship {
+  return { ...row, metadata: safeJson(row.metadata, {}) };
+}
+
+export function upsertRelationship(a: number, b: number, kind: string, strengthDelta: number): void {
+  const db = getDb();
+  db.run(
+    `INSERT INTO relationships (lobster_a, lobster_b, kind, strength, last_interaction)
+     VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(lobster_a, lobster_b, kind)
+     DO UPDATE SET strength = MIN(10, strength + ?), last_interaction = datetime('now')`,
+    [a, b, kind, Math.max(1, strengthDelta), strengthDelta],
+  );
+}
+
+export function getRelationships(lobsterId: number): Relationship[] {
+  const rows = getDb()
+    .query<RelRow, [number, number]>(
+      "SELECT * FROM relationships WHERE lobster_a = ? OR lobster_b = ? ORDER BY strength DESC",
+    )
+    .all(lobsterId, lobsterId);
+  return rows.map(parseRelationship);
+}
+
+export function getRelationshipBetween(a: number, b: number): Relationship[] {
+  const rows = getDb()
+    .query<RelRow, [number, number, number, number]>(
+      "SELECT * FROM relationships WHERE (lobster_a = ? AND lobster_b = ?) OR (lobster_a = ? AND lobster_b = ?)",
+    )
+    .all(a, b, b, a);
+  return rows.map(parseRelationship);
+}
+
+export function getRelationshipNetwork(limit: number): Relationship[] {
+  const rows = getDb()
+    .query<RelRow, [number]>("SELECT * FROM relationships ORDER BY strength DESC LIMIT ?")
+    .all(limit);
+  return rows.map(parseRelationship);
+}
+
+// ---------------------------------------------------------------------------
+// Memory stream helpers
+// ---------------------------------------------------------------------------
+
+interface MemRow {
+  id: number; source_event_id: number | null; summary: string;
+  importance: number; tags: string; location: string | null;
+  actor_ids: string; created_at: string;
+}
+
+function parseMemory(row: MemRow): Memory {
+  return { ...row, tags: safeJson(row.tags, []), actor_ids: safeJson(row.actor_ids, []) };
+}
+
+export function insertMemory(params: {
+  source_event_id?: number | null;
+  summary: string;
+  importance: number;
+  tags: string[];
+  location?: string | null;
+  actor_ids: number[];
+}): number {
+  const r = getDb().run(
+    `INSERT INTO memory_stream (source_event_id, summary, importance, tags, location, actor_ids)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      params.source_event_id ?? null, params.summary, params.importance,
+      JSON.stringify(params.tags), params.location ?? null, JSON.stringify(params.actor_ids),
+    ],
+  );
+  return Number(r.lastInsertRowid);
+}
+
+export function queryMemories(params: {
+  tags?: string[];
+  location?: string;
+  minImportance?: number;
+  limit?: number;
+}): Memory[] {
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+  if (params.minImportance) {
+    where.push("importance >= ?");
+    args.push(params.minImportance);
+  }
+  if (params.location) {
+    where.push("location = ?");
+    args.push(params.location);
+  }
+  const clause = where.length ? "WHERE " + where.join(" AND ") : "";
+  const limit = Math.min(200, params.limit ?? 50);
+  args.push(limit);
+  const rows = getDb()
+    .query<MemRow, (string | number)[]>(
+      `SELECT * FROM memory_stream ${clause} ORDER BY importance DESC, id DESC LIMIT ?`,
+    )
+    .all(...args);
+  let results = rows.map(parseMemory);
+  // Filter by tags in JS (SQLite JSON querying is limited)
+  if (params.tags?.length) {
+    results = results.filter((m) => params.tags!.some((t) => m.tags.includes(t)));
+  }
+  return results;
+}
+
+export function getMemoriesForLobster(lobsterId: number, limit: number): Memory[] {
+  // Search in actor_ids JSON array
+  const rows = getDb()
+    .query<MemRow, [string, number]>(
+      "SELECT * FROM memory_stream WHERE actor_ids LIKE ? ORDER BY id DESC LIMIT ?",
+    )
+    .all(`%${lobsterId}%`, limit);
+  return rows.map(parseMemory).filter((m) => m.actor_ids.includes(lobsterId));
+}
+
+export function getLastProcessedEventId(): number {
+  const row = getDb()
+    .query<{ id: number }, []>("SELECT MAX(source_event_id) AS id FROM memory_stream")
+    .get();
+  return row?.id ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Trigger helpers
+// ---------------------------------------------------------------------------
+
+interface TriggerRow {
+  id: number; name: string; condition: string; action: string;
+  cooldown_ms: number; last_fired_at: string | null; enabled: number; created_at: string;
+}
+
+function parseTrigger(row: TriggerRow): Trigger {
+  return {
+    ...row,
+    condition: safeJson(row.condition, {} as Trigger["condition"]),
+    action: safeJson(row.action, { type: "broadcast" } as Trigger["action"]),
+    enabled: !!row.enabled,
+  };
+}
+
+export function listTriggers(enabledOnly: boolean = false): Trigger[] {
+  const where = enabledOnly ? "WHERE enabled = 1" : "";
+  const rows = getDb()
+    .query<TriggerRow, []>(`SELECT * FROM triggers ${where} ORDER BY id`)
+    .all();
+  return rows.map(parseTrigger);
+}
+
+export function insertTrigger(params: {
+  name: string;
+  condition: unknown;
+  action: unknown;
+  cooldown_ms: number;
+  enabled?: boolean;
+}): number {
+  const r = getDb().run(
+    `INSERT INTO triggers (name, condition, action, cooldown_ms, enabled)
+     VALUES (?, ?, ?, ?, ?)`,
+    [
+      params.name, JSON.stringify(params.condition), JSON.stringify(params.action),
+      params.cooldown_ms, params.enabled !== false ? 1 : 0,
+    ],
+  );
+  return Number(r.lastInsertRowid);
+}
+
+export function updateTriggerFired(id: number): void {
+  getDb().run("UPDATE triggers SET last_fired_at = datetime('now') WHERE id = ?", [id]);
+}
+
+export function deleteTrigger(id: number): void {
+  getDb().run("DELETE FROM triggers WHERE id = ?", [id]);
+}
+
+export function countTriggers(): number {
+  const row = getDb().query<{ n: number }, []>("SELECT COUNT(*) AS n FROM triggers").get();
+  return row?.n ?? 0;
+}
+
+// ---------------------------------------------------------------------------
 // Reset (for --reset-world)
 // ---------------------------------------------------------------------------
 
@@ -568,6 +895,9 @@ export function resetWorldKeepLobsters(): void {
     db.run("DELETE FROM events");
     db.run("DELETE FROM locations");
     db.run("DELETE FROM messages");
+    db.run("DELETE FROM relationships");
+    db.run("DELETE FROM memory_stream");
+    db.run("DELETE FROM triggers");
   });
   tx();
 }

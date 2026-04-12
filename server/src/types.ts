@@ -1,19 +1,85 @@
 // Shared types between backend modules. These mirror the SQLite row shape
 // with JSON columns already parsed.
 
+export type Role = "god" | "admin" | "player";
+
+export interface FashionItem {
+  slot: string;  // "head" | "claw" | "shell" | "accessory"
+  item: string;
+}
+
 export interface Lobster {
   id: number;
   token: string;
   name: string;
   job: string;
   bio: string;
+  role: Role;
   location: string;
   coins: number;
   forge_score: number;
   reputation: number;
   specialty: Record<string, number>;
   badges: string[];
+  // Rich attributes
+  personality: string[];
+  honor_tags: string[];
+  hunger: number;
+  warmth: number;
+  fashion: FashionItem[];
+  skills: Record<string, number>;
+  profession: string;
+  prof_level: number;
+  // Crypto
   card_sig: string;
+  created_at: string;
+}
+
+export interface Relationship {
+  id: number;
+  lobster_a: number;
+  lobster_b: number;
+  kind: string;
+  strength: number;
+  last_interaction: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface Memory {
+  id: number;
+  source_event_id: number | null;
+  summary: string;
+  importance: number;
+  tags: string[];
+  location: string | null;
+  actor_ids: number[];
+  created_at: string;
+}
+
+export interface TriggerCondition {
+  event_kind?: string;
+  min_count?: number;
+  location?: string;
+  time_window_ms?: number;
+  actor_role?: string;
+}
+
+export interface TriggerAction {
+  type: "post_task" | "broadcast" | "dm_lobster" | "create_event" | "grant_badge";
+  template?: string;
+  target_actor?: boolean;
+  payload?: Record<string, unknown>;
+}
+
+export interface Trigger {
+  id: number;
+  name: string;
+  condition: TriggerCondition;
+  action: TriggerAction;
+  cooldown_ms: number;
+  last_fired_at: string | null;
+  enabled: boolean;
   created_at: string;
 }
 

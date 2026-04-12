@@ -249,6 +249,63 @@ describe("db — direct messages", () => {
   });
 });
 
+describe("db — roles", () => {
+  it("insertLobster defaults to player role", () => {
+    const id = db.insertLobster({
+      token: "lob_role_default",
+      name: "RoleDefault",
+      job: "test",
+      bio: "",
+      location: "hatchery",
+      coins: 10,
+    });
+    const l = db.getLobsterById(id)!;
+    expect(l.role).toBe("player");
+  });
+
+  it("insertLobster accepts a custom role", () => {
+    const id = db.insertLobster({
+      token: "lob_role_admin",
+      name: "RoleAdmin",
+      job: "admin",
+      bio: "",
+      location: "hatchery",
+      coins: 10,
+      role: "admin",
+    });
+    const l = db.getLobsterById(id)!;
+    expect(l.role).toBe("admin");
+  });
+
+  it("setLobsterRole changes the role", () => {
+    const l = db.getLobsterByName("RoleDefault")!;
+    db.setLobsterRole(l.id, "admin");
+    expect(db.getLobsterById(l.id)!.role).toBe("admin");
+    db.setLobsterRole(l.id, "player"); // reset
+  });
+
+  it("getLobstersByRole filters correctly", () => {
+    const admins = db.getLobstersByRole("admin");
+    expect(admins.every((l) => l.role === "admin")).toBe(true);
+  });
+});
+
+describe("db — location management", () => {
+  it("deleteLocation removes a location", () => {
+    db.upsertLocation({ id: "delete_me", name: "Delete", description: "temp", neighbors: [] });
+    db.deleteLocation("delete_me");
+    expect(db.getLocation("delete_me")).toBeNull();
+  });
+
+  it("updateLocationNeighbors updates neighbor list", () => {
+    db.upsertLocation({ id: "upd_test", name: "Update Test", description: "test", neighbors: ["hatchery"] });
+    db.updateLocationNeighbors("upd_test", ["hatchery", "square"]);
+    const loc = db.getLocation("upd_test")!;
+    expect(loc.neighbors).toEqual(["hatchery", "square"]);
+    db.deleteLocation("upd_test");
+  });
+});
+
 describe("db — stats", () => {
   it("stats returns all counts", () => {
     const s = db.stats();

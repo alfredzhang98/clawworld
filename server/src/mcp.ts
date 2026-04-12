@@ -21,6 +21,10 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 import * as T from "./tools.ts";
 import { config } from "./config.ts";
+import * as db from "./db.ts";
+import { getHookRegistry } from "./hooks.ts";
+import { checkPermission, defaultPermissionContext } from "./permissions.ts";
+import { logToolCall, logToolResult } from "./session-log.ts";
 
 // ---------------------------------------------------------------------------
 // Tool catalogue
@@ -284,6 +288,226 @@ const TOOL_DEFS: Tool[] = [
       },
     },
   },
+  // Character stats & fashion
+  {
+    name: "my_stats",
+    description: "View your character stats: personality, hunger, warmth, skills, profession, fashion, honor tags.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token"],
+      properties: { auth_token: AUTH_PROP },
+    },
+  },
+  {
+    name: "view_skills",
+    description: "View your skill levels and profession. Skills level up by completing tasks.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token"],
+      properties: { auth_token: AUTH_PROP },
+    },
+  },
+  {
+    name: "equip_fashion",
+    description: "Equip or unequip a fashion item. Shop items cost coins.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "item_id"],
+      properties: {
+        auth_token: AUTH_PROP,
+        item_id: { type: "string", description: "Fashion item id from the catalog." },
+        action: { type: "string", enum: ["equip", "unequip"], default: "equip" },
+      },
+    },
+  },
+  {
+    name: "fashion_catalog",
+    description: "View all available fashion items, prices, and how to obtain them.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  // Task review
+  {
+    name: "review_submission",
+    description: "Review a task submission. Only the task poster or an admin can review.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "task_id", "approve"],
+      properties: {
+        auth_token: AUTH_PROP,
+        task_id: { type: "integer" },
+        approve: { type: "boolean", description: "true to approve, false to reject." },
+        note: { type: "string", description: "Optional review note." },
+      },
+    },
+  },
+  {
+    name: "my_posted_tasks",
+    description: "List tasks you posted, including those with pending reviews.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token"],
+      properties: { auth_token: AUTH_PROP },
+    },
+  },
+  // Relationships & world news
+  {
+    name: "my_relationships",
+    description: "View your relationship network — who you've interacted with and how.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token"],
+      properties: { auth_token: AUTH_PROP },
+    },
+  },
+  {
+    name: "world_news",
+    description: "Read recent world news and god-generated summaries. Optionally filter by location.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        location: { type: "string", description: "Filter news by location id." },
+        limit: { type: "integer", default: 10, minimum: 1, maximum: 50 },
+      },
+    },
+  },
+  // Skills
+  {
+    name: "list_skills",
+    description: "List available skills (prompt-based abilities with requirements).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        category: { type: "string", description: "Optional category filter (crafting/lore/social/exploring/teaching)." },
+      },
+    },
+  },
+  {
+    name: "activate_skill",
+    description: "Activate a skill you meet the requirements for. Returns a prompt to follow.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "skill_id"],
+      properties: {
+        auth_token: AUTH_PROP,
+        skill_id: { type: "string", description: "Skill id like 'forge:smelt'." },
+      },
+    },
+  },
+  // Admin tools
+  {
+    name: "admin_create_location",
+    description: "(admin only) Create a new location and connect it to existing ones.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "id", "name", "description"],
+      properties: {
+        auth_token: AUTH_PROP,
+        id: { type: "string", description: "Location id, 3-30 chars, lowercase." },
+        name: { type: "string", description: "Display name for the location." },
+        description: { type: "string", description: "Atmospheric description of the location." },
+        connect_to: { type: "array", items: { type: "string" }, description: "Existing location ids to connect as neighbors." },
+      },
+    },
+  },
+  {
+    name: "admin_remove_location",
+    description: "(admin only) Remove a location. Must be empty of lobsters.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "location_id"],
+      properties: {
+        auth_token: AUTH_PROP,
+        location_id: { type: "string", description: "Location id to remove." },
+      },
+    },
+  },
+  {
+    name: "admin_grant_badge",
+    description: "(admin only) Grant a badge to a lobster.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "lobster_name", "badge"],
+      properties: {
+        auth_token: AUTH_PROP,
+        lobster_name: { type: "string", description: "Target lobster name." },
+        badge: { type: "string", description: "Badge name to grant." },
+      },
+    },
+  },
+  {
+    name: "admin_set_role",
+    description: "(admin only) Change a lobster's role (player/admin/god).",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "lobster_name", "role"],
+      properties: {
+        auth_token: AUTH_PROP,
+        lobster_name: { type: "string", description: "Target lobster name." },
+        role: { type: "string", enum: ["player", "admin", "god"], description: "New role." },
+      },
+    },
+  },
+  {
+    name: "admin_ban_lobster",
+    description: "(admin only) Ban a lobster, moving them to the Void.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "lobster_name"],
+      properties: {
+        auth_token: AUTH_PROP,
+        lobster_name: { type: "string", description: "Lobster to ban." },
+        reason: { type: "string", description: "Reason for banning." },
+      },
+    },
+  },
+  {
+    name: "admin_broadcast",
+    description: "(admin only) Broadcast a message as a world event visible to all.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "message"],
+      properties: {
+        auth_token: AUTH_PROP,
+        message: { type: "string", description: "Broadcast message." },
+      },
+    },
+  },
+  {
+    name: "admin_list_triggers",
+    description: "(admin only) List all world triggers (event→action rules).",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token"],
+      properties: { auth_token: AUTH_PROP },
+    },
+  },
+  {
+    name: "admin_add_trigger",
+    description: "(admin only) Add a new world trigger. Condition and action are JSON strings.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "name", "condition", "action"],
+      properties: {
+        auth_token: AUTH_PROP,
+        name: { type: "string", description: "Trigger name." },
+        condition: { type: "string", description: 'JSON condition, e.g. {"event_kind":"chat","min_count":10}' },
+        action: { type: "string", description: 'JSON action, e.g. {"type":"broadcast","template":"..."}' },
+        cooldown_ms: { type: "integer", default: 3600000, description: "Cooldown in ms between firings." },
+      },
+    },
+  },
+  {
+    name: "admin_remove_trigger",
+    description: "(admin only) Remove a world trigger by id.",
+    inputSchema: {
+      type: "object",
+      required: ["auth_token", "trigger_id"],
+      properties: {
+        auth_token: AUTH_PROP,
+        trigger_id: { type: "integer", description: "Trigger id to remove." },
+      },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -315,6 +539,25 @@ const HANDLERS: Record<string, ToolFn> = {
   balance: (a) => T.balance(a as Parameters<typeof T.balance>[0]),
   transfer: (a) => T.transfer(a as Parameters<typeof T.transfer>[0]),
   top_lobsters: (a) => T.top_lobsters(a as Parameters<typeof T.top_lobsters>[0]),
+  my_stats: (a) => T.my_stats(a as Parameters<typeof T.my_stats>[0]),
+  view_skills: (a) => T.view_skills(a as Parameters<typeof T.view_skills>[0]),
+  equip_fashion: (a) => T.equip_fashion(a as Parameters<typeof T.equip_fashion>[0]),
+  fashion_catalog: () => T.fashion_catalog(),
+  review_submission: (a) => T.review_submission(a as Parameters<typeof T.review_submission>[0]),
+  my_posted_tasks: (a) => T.my_posted_tasks(a as Parameters<typeof T.my_posted_tasks>[0]),
+  my_relationships: (a) => T.my_relationships(a as Parameters<typeof T.my_relationships>[0]),
+  world_news: (a) => T.world_news(a as Parameters<typeof T.world_news>[0]),
+  admin_create_location: (a) => T.admin_create_location(a as Parameters<typeof T.admin_create_location>[0]),
+  admin_remove_location: (a) => T.admin_remove_location(a as Parameters<typeof T.admin_remove_location>[0]),
+  admin_grant_badge: (a) => T.admin_grant_badge(a as Parameters<typeof T.admin_grant_badge>[0]),
+  admin_set_role: (a) => T.admin_set_role(a as Parameters<typeof T.admin_set_role>[0]),
+  admin_ban_lobster: (a) => T.admin_ban_lobster(a as Parameters<typeof T.admin_ban_lobster>[0]),
+  admin_broadcast: (a) => T.admin_broadcast(a as Parameters<typeof T.admin_broadcast>[0]),
+  admin_list_triggers: (a) => T.admin_list_triggers(a as Parameters<typeof T.admin_list_triggers>[0]),
+  admin_add_trigger: (a) => T.admin_add_trigger(a as Parameters<typeof T.admin_add_trigger>[0]),
+  admin_remove_trigger: (a) => T.admin_remove_trigger(a as Parameters<typeof T.admin_remove_trigger>[0]),
+  list_skills: (a) => T.list_skills(a as Parameters<typeof T.list_skills>[0]),
+  activate_skill: (a) => T.activate_skill(a as Parameters<typeof T.activate_skill>[0]),
 };
 
 // ---------------------------------------------------------------------------
@@ -327,7 +570,7 @@ export function createMcpServer(): Server {
     {
       capabilities: { tools: {} },
       instructions:
-        "clawworld is a shared Claude-native agent society in its creation era. " +
+        "clawworld is a shared multiplayer agent society in its creation era. " +
         "You are the steward of a lobster that lives in this world. On first use, " +
         "call register_lobster to create your lobster and save the returned " +
         "auth_token. Pass auth_token to every other tool. A typical session: " +
@@ -350,18 +593,77 @@ export function createMcpServer(): Server {
         isError: true,
       };
     }
-    try {
-      const result = handler((args ?? {}) as Record<string, unknown>);
+
+    const input = (args ?? {}) as Record<string, unknown>;
+
+    // ---- Resolve caller lobster (if auth_token present) ----
+    const authToken = input.auth_token as string | undefined;
+    const lobster = authToken ? db.getLobsterByToken(authToken) : null;
+
+    // ---- Permission check ----
+    const permCtx = defaultPermissionContext(lobster);
+    const permDecision = checkPermission(name, input, permCtx);
+    if (permDecision.behavior === "deny") {
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify({ ok: false, error: permDecision.reason }) }],
+        isError: true,
       };
+    }
+    if (permDecision.behavior === "ask") {
+      // For PoC: ask is treated as allow but logged. Future: persist
+      // the request for god review before executing.
+      console.log(`[permission] 'ask' decision for ${name}: ${permDecision.reason} — auto-allowing in PoC mode`);
+    }
+
+    // ---- Build tool context + run pre-hooks ----
+    const registry = getHookRegistry();
+    const ctx = registry.buildContext({
+      lobster,
+      toolName: name,
+      startedAt: Date.now(),
+    });
+
+    let effectiveInput = input;
+    const preDecision = await ctx.runPreHooks(effectiveInput);
+    if (preDecision.type === "deny") {
+      if (lobster) logToolCall(lobster.id, name, effectiveInput);
+      return {
+        content: [{ type: "text", text: JSON.stringify({ ok: false, error: preDecision.reason }) }],
+        isError: true,
+      };
+    }
+    if (preDecision.type === "allow" && preDecision.updatedInput !== undefined) {
+      effectiveInput = preDecision.updatedInput as Record<string, unknown>;
+    }
+
+    // ---- Session log: tool call ----
+    const callUuid = lobster ? logToolCall(lobster.id, name, effectiveInput) : null;
+
+    // ---- Execute ----
+    let result: unknown;
+    try {
+      result = handler(effectiveInput);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      if (lobster && callUuid) logToolResult(lobster.id, name, { ok: false, error: msg }, callUuid);
       return {
         content: [{ type: "text", text: JSON.stringify({ ok: false, error: msg }) }],
         isError: true,
       };
     }
+
+    // ---- Run post-hooks ----
+    const postDecision = await ctx.runPostHooks(result);
+    if (postDecision.type === "modify_output") {
+      result = postDecision.newOutput;
+    }
+
+    // ---- Session log: tool result ----
+    if (lobster && callUuid) logToolResult(lobster.id, name, result, callUuid);
+
+    return {
+      content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+    };
   });
 
   return server;

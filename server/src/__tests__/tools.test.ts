@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll } from "bun:test";
 import * as db from "../db.ts";
 import { seed } from "../genesis.ts";
 import * as tools from "../tools.ts";
+import { GodAgent } from "../god-agent.ts";
 
 beforeAll(() => {
   db.initSchema();
@@ -56,7 +57,7 @@ describe("tools — whoami / my_card", () => {
   it("my_card returns a signed card", () => {
     const r = tools.my_card({ auth_token: token });
     expect(r.ok).toBe(true);
-    expect((r as any).card.signature).toMatch(/^[0-9a-f]{64}$/);
+    expect((r as any).card.signature).toMatch(/^[0-9a-f]{128}$/);
   });
 });
 
@@ -282,5 +283,155 @@ describe("tools — economy (balance, transfer, top_lobsters)", () => {
     const r = tools.top_lobsters({ by: "coins", limit: 5 });
     expect(r.ok).toBe(true);
     expect((r as any).lobsters.length).toBeGreaterThan(0);
+  });
+});
+
+describe("tools — admin", () => {
+  let adminToken: string;
+  let playerToken: string;
+
+  beforeAll(() => {
+    const a = tools.register_lobster({ name: "AdminBot", job: "admin" });
+    adminToken = (a as any).auth_token;
+    const al = db.getLobsterByName("AdminBot")!;
+    db.setLobsterRole(al.id, "admin");
+
+    const p = tools.register_lobster({ name: "Pleb", job: "worker" });
+    playerToken = (p as any).auth_token;
+  });
+
+  it("admin_create_location succeeds with admin role", () => {
+    const r = tools.admin_create_location({
+      auth_token: adminToken,
+      id: "tavern",
+      name: "The Tavern",
+      description: "A lively place.",
+      connect_to: ["square"],
+    });
+    expect(r.ok).toBe(true);
+    expect((r as any).location_id).toBe("tavern");
+
+    // Verify neighbor was updated
+    const square = db.getLocation("square")!;
+    expect(square.neighbors).toContain("tavern");
+  });
+
+  it("admin_create_location fails for player", () => {
+    const r = tools.admin_create_location({
+      auth_token: playerToken,
+      id: "forbidden",
+      name: "No",
+      description: "Nope",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("admin");
+  });
+
+  it("admin_remove_location removes an empty location", () => {
+    tools.admin_create_location({
+      auth_token: adminToken,
+      id: "temp_loc",
+      name: "Temp",
+      description: "Will be removed",
+      connect_to: ["square"],
+    });
+    const r = tools.admin_remove_location({
+      auth_token: adminToken,
+      location_id: "temp_loc",
+    });
+    expect(r.ok).toBe(true);
+    expect(db.getLocation("temp_loc")).toBeNull();
+  });
+
+  it("admin_grant_badge gives a badge", () => {
+    const r = tools.admin_grant_badge({
+      auth_token: adminToken,
+      lobster_name: "Pleb",
+      badge: "Test Badge",
+    });
+    expect(r.ok).toBe(true);
+    const pleb = db.getLobsterByName("Pleb")!;
+    expect(pleb.badges).toContain("Test Badge");
+  });
+
+  it("admin_set_role changes a role", () => {
+    const r = tools.admin_set_role({
+      auth_token: adminToken,
+      lobster_name: "Pleb",
+      role: "admin",
+    });
+    expect(r.ok).toBe(true);
+    expect((r as any).new_role).toBe("admin");
+    // Reset back to player for other tests
+    db.setLobsterRole(db.getLobsterByName("Pleb")!.id, "player");
+  });
+
+  it("admin_set_role rejects god promotion from admin", () => {
+    const r = tools.admin_set_role({
+      auth_token: adminToken,
+      lobster_name: "Pleb",
+      role: "god",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain("only god");
+  });
+
+  it("admin_ban_lobster moves lobster to void", () => {
+    const r = tools.admin_ban_lobster({
+      auth_token: adminToken,
+      lobster_name: "Pleb",
+      reason: "testing",
+    });
+    expect(r.ok).toBe(true);
+    const pleb = db.getLobsterByName("Pleb")!;
+    expect(pleb.location).toBe("void");
+  });
+
+  it("admin_broadcast logs a world event", () => {
+    const r = tools.admin_broadcast({
+      auth_token: adminToken,
+      message: "Attention all lobsters!",
+    });
+    expect(r.ok).toBe(true);
+    const events = db.recentEvents(5);
+    expect(events.some((e) => e.kind === "broadcast")).toBe(true);
+  });
+});
+
+describe("tools — role field", () => {
+  it("registered lobsters have role=player by default", () => {
+    const r = tools.register_lobster({ name: "RoleTest", job: "test" });
+    expect(r.ok).toBe(true);
+    const lobster = db.getLobsterByName("RoleTest")!;
+    expect(lobster.role).toBe("player");
+  });
+
+  it("god lobster exists from genesis seed", () => {
+    const gods = db.getLobstersByRole("god");
+    expect(gods.length).toBeGreaterThanOrEqual(1);
+    expect(gods[0].role).toBe("god");
+  });
+});
+
+describe("god-agent", () => {
+  it("welcomes new lobsters via DM", () => {
+    // Create a fresh lobster
+    const r = tools.register_lobster({ name: "GodTestNewbie", job: "fresh" });
+    expect(r.ok).toBe(true);
+    const newbie = db.getLobsterByName("GodTestNewbie")!;
+
+    // Get god lobster
+    const gods = db.getLobstersByRole("god");
+    expect(gods.length).toBeGreaterThan(0);
+    const god = gods[0];
+
+    // Run the god agent tick
+    const agent = new GodAgent(god.id, god.token);
+    // Access private method via prototype for testing
+    (agent as any).welcomeNewLobsters();
+
+    // Verify DM was sent
+    const dms = db.getReceivedDMs(newbie.id, 10);
+    expect(dms.some((dm) => dm.from_name === god.name)).toBe(true);
   });
 });

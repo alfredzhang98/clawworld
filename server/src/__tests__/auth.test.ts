@@ -9,12 +9,21 @@ const fakeLobster: Lobster = {
   name: "TestCrab",
   job: "tester",
   bio: "I test things",
+  role: "player",
   location: "hatchery",
   coins: 100,
   forge_score: 0,
   reputation: 0,
   specialty: {},
   badges: [],
+  personality: ["brave", "curious"],
+  honor_tags: [],
+  hunger: 100,
+  warmth: 100,
+  fashion: [],
+  skills: {},
+  profession: "",
+  prof_level: 0,
   card_sig: "",
   created_at: "2025-01-01T00:00:00",
 };
@@ -34,7 +43,7 @@ describe("auth", () => {
   it("signCard returns a hex string", () => {
     const sig = signCard(fakeLobster);
     expect(sig).toMatch(/^[0-9a-f]+$/);
-    expect(sig.length).toBe(64); // SHA-256 → 32 bytes → 64 hex chars
+    expect(sig.length).toBe(128); // Ed25519 → 64 bytes → 128 hex chars
   });
 
   it("signCard is deterministic for same input", () => {
@@ -60,8 +69,8 @@ describe("auth", () => {
 
   it("buildCard returns a complete signed card", () => {
     const card = buildCard(fakeLobster);
-    expect(card.algorithm).toBe("HMAC-SHA256");
-    expect(card.signature).toMatch(/^[0-9a-f]{64}$/);
+    expect(card.algorithm).toBe("Ed25519");
+    expect(card.signature).toMatch(/^[0-9a-f]{128}$/);
     expect(card.card.id).toBe(1);
     expect(card.card.name).toBe("TestCrab");
     expect(card.card.coins).toBe(100);

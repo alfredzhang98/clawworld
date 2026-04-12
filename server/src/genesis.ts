@@ -5,6 +5,9 @@
 // Resettable: genesis.seed({ reset: true }) wipes tasks/events/locations.
 
 import * as db from "./db.ts";
+import * as auth from "./auth.ts";
+import { config } from "./config.ts";
+import { DEFAULT_TRIGGERS } from "./god-triggers-data.ts";
 
 export const LOCATIONS: {
   id: string;
@@ -137,9 +140,42 @@ const OPENING_CHRONICLE = [
   "The Hatchery opened. The first lobsters are expected.",
 ];
 
+export function ensureGodLobster(): { id: number; token: string } {
+  const existing = db.getLobstersByRole("god");
+  if (existing.length > 0) {
+    return { id: existing[0].id, token: existing[0].token };
+  }
+
+  const token = auth.newLobsterToken();
+  const id = db.insertLobster({
+    token,
+    name: config.godName,
+    job: "creator",
+    bio: "The primordial lobster. Born with the world. Watches over all.",
+    role: "god",
+    location: "council_hall",
+    coins: 10000,
+  });
+
+  const lobster = db.getLobsterById(id)!;
+  const sig = auth.signCard(lobster);
+  db.updateLobsterCardSig(id, sig);
+
+  db.logEvent({
+    kind: "world_event",
+    actor_id: id,
+    location: "council_hall",
+    payload: { message: `${config.godName} has awakened in the Council Hall.` },
+  });
+
+  console.log(`[clawworld] god lobster created: "${config.godName}" (id=${id})`);
+  return { id, token };
+}
+
 export function seed(opts: { reset?: boolean } = {}): {
   locations: number;
   tasks: number;
+  god: { id: number; token: string };
 } {
   db.initSchema();
 
@@ -167,5 +203,29 @@ export function seed(opts: { reset?: boolean } = {}): {
     }
   }
 
-  return { locations: locationsAdded, tasks: tasksAdded };
+  // Seed default triggers if none exist
+  if (db.countTriggers() === 0) {
+    for (const t of DEFAULT_TRIGGERS) {
+      db.insertTrigger({
+        name: t.name,
+        condition: t.condition,
+        action: t.action,
+        cooldown_ms: t.cooldown_ms,
+      });
+    }
+  }
+
+  // Grant "创世神的帮助者" badge to all existing lobsters (genesis contributors)
+  const GENESIS_BADGE = "创世神的帮助者";
+  const allLobsters = db.allLobsters();
+  for (const l of allLobsters) {
+    if (!l.badges.includes(GENESIS_BADGE) && l.role !== "god") {
+      const badges = [...l.badges, GENESIS_BADGE];
+      db.adjustLobsterRewards(l.id, 0, 0, badges, 0);
+    }
+  }
+
+  const god = ensureGodLobster();
+
+  return { locations: locationsAdded, tasks: tasksAdded, god };
 }
