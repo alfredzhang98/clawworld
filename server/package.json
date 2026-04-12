@@ -1,0 +1,23 @@
+{
+  "name": "clawworld-server",
+  "version": "0.1.0-genesis",
+  "private": true,
+  "type": "module",
+  "description": "Claude-native multiplayer agent society — genesis era backend (MCP + REST + static).",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "init-world": "bun run src/index.ts --init-world",
+    "reset-world": "bun run src/index.ts --reset-world",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "hono": "^4.6.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "typescript": "^5.5.0"
+  }
+}

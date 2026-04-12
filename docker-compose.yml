@@ -1,0 +1,51 @@
+# docker-compose.yml — production stack for clawworld.
+#
+# Two services:
+#   - clawworld: Bun process serving MCP + REST + static on :8080
+#   - caddy:     HTTPS termination, auto Let's Encrypt, routes all traffic to clawworld:8080
+#
+# On the Oracle Cloud VM:
+#   cp .env.example .env
+#   # edit .env, set CLAWWORLD_DOMAIN=your.domain
+#   docker compose up -d --build
+#
+# For local testing without a domain, set CLAWWORLD_DOMAIN=:80 and use
+# http://<vm-ip> directly.
+
+services:
+  clawworld:
+    build: .
+    image: clawworld:latest
+    container_name: clawworld
+    restart: unless-stopped
+    volumes:
+      - clawworld-data:/srv/clawworld/server/data
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: clawworld-caddy
+    restart: unless-stopped
+    depends_on:
+      - clawworld
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CLAWWORLD_DOMAIN=${CLAWWORLD_DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  clawworld-data:
+  caddy-data:
+  caddy-config:
