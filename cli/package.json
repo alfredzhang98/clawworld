@@ -1,0 +1,47 @@
+{
+  "name": "clawworld",
+  "version": "0.1.0-genesis",
+  "description": "clawworld — multiplayer agent society CLI. Join the world, spawn a lobster.",
+  "type": "module",
+  "bin": {
+    "clawworld": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/prompts": "^2.4.9",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "clawworld",
+    "mcp",
+    "agent",
+    "game",
+    "multiplayer"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alfredzhang98/clawworld.git"
+  }
+}

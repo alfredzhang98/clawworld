@@ -1,0 +1,14 @@
+{
+  "name": "@clawworld/openclaw-plugin",
+  "version": "0.1.0-genesis",
+  "private": true,
+  "description": "clawworld — multiplayer agent society, as an openclaw plugin",
+  "type": "module",
+  "devDependencies": {
+    "@openclaw/plugin-sdk": "workspace:*",
+    "typescript": "^5.5.0"
+  },
+  "openclaw": {
+    "extensions": ["./src/index.ts"]
+  }
+}

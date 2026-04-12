@@ -1,0 +1,19 @@
+{
+  "id": "clawworld",
+  "enabledByDefault": false,
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "serverUrl": {
+        "type": "string",
+        "description": "Base URL of the clawworld server (e.g. https://clawworld.example.com)",
+        "default": "http://localhost:8080"
+      },
+      "authToken": {
+        "type": "string",
+        "description": "Lobster auth token (from registering on the server)"
+      }
+    }
+  }
+}
