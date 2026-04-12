@@ -76,10 +76,23 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY (from_id) REFERENCES lobsters(id)
 );
 
+CREATE TABLE IF NOT EXISTS direct_messages (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id       INTEGER NOT NULL,
+    to_id         INTEGER NOT NULL,
+    content       TEXT    NOT NULL,
+    read          INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (from_id) REFERENCES lobsters(id),
+    FOREIGN KEY (to_id)   REFERENCES lobsters(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_location_created ON messages(location, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_lobsters_location ON lobsters(location);
+CREATE INDEX IF NOT EXISTS idx_dm_to_created ON direct_messages(to_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_from_created ON direct_messages(from_id, created_at DESC);
 `;
 
 // ---------------------------------------------------------------------------
@@ -263,10 +276,11 @@ export function adjustLobsterRewards(
   deltaCoins: number,
   deltaRep: number,
   badges: string[],
+  deltaForge: number = 0,
 ): void {
   getDb().run(
-    "UPDATE lobsters SET coins = coins + ?, reputation = reputation + ?, badges = ? WHERE id = ?",
-    [deltaCoins, deltaRep, JSON.stringify(badges), id],
+    "UPDATE lobsters SET coins = coins + ?, reputation = reputation + ?, forge_score = forge_score + ?, badges = ? WHERE id = ?",
+    [deltaCoins, deltaRep, deltaForge, JSON.stringify(badges), id],
   );
 }
 
@@ -492,6 +506,55 @@ export function recentMessagesAt(
     )
     .all(location, limit)
     .reverse();
+}
+
+// ---------------------------------------------------------------------------
+// Direct message helpers
+// ---------------------------------------------------------------------------
+
+export function insertDM(fromId: number, toId: number, content: string): number {
+  const r = getDb().run(
+    "INSERT INTO direct_messages (from_id, to_id, content) VALUES (?, ?, ?)",
+    [fromId, toId, content],
+  );
+  return Number(r.lastInsertRowid);
+}
+
+export function getReceivedDMs(
+  toId: number,
+  limit: number,
+  unreadOnly: boolean = false,
+): { id: number; from_name: string; content: string; read: boolean; created_at: string }[] {
+  const where = unreadOnly ? "AND dm.read = 0" : "";
+  return getDb()
+    .query<
+      { id: number; from_name: string; content: string; read: number; created_at: string },
+      [number, number]
+    >(
+      `SELECT dm.id, l.name AS from_name, dm.content, dm.read, dm.created_at
+       FROM direct_messages dm JOIN lobsters l ON l.id = dm.from_id
+       WHERE dm.to_id = ? ${where}
+       ORDER BY dm.created_at DESC LIMIT ?`,
+    )
+    .all(toId, limit)
+    .map((r) => ({ ...r, read: !!r.read }));
+}
+
+export function markDMsRead(toId: number): number {
+  const r = getDb().run(
+    "UPDATE direct_messages SET read = 1 WHERE to_id = ? AND read = 0",
+    [toId],
+  );
+  return r.changes;
+}
+
+export function countUnreadDMs(toId: number): number {
+  const row = getDb()
+    .query<{ n: number }, [number]>(
+      "SELECT COUNT(*) AS n FROM direct_messages WHERE to_id = ? AND read = 0",
+    )
+    .get(toId);
+  return row?.n ?? 0;
 }
 
 // ---------------------------------------------------------------------------

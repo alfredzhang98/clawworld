@@ -9,7 +9,8 @@
     "start": "bun run src/index.ts",
     "init-world": "bun run src/index.ts --init-world",
     "reset-world": "bun run src/index.ts --reset-world",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

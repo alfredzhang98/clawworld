@@ -232,7 +232,12 @@ export function submit_task(args: {
   const badges = [...l.badges];
   if (task.badge && !badges.includes(task.badge)) badges.push(task.badge);
 
-  db.adjustLobsterRewards(l.id, task.reward_coins, task.reward_rep, badges);
+  // Calculate forge_score bonus
+  let forge = 1; // base: +1 for any task completion
+  if (task.location === "forge_ruins") forge += 2; // bonus for forge work
+  if (task.category === "genesis") forge += 1; // bonus for genesis tasks
+
+  db.adjustLobsterRewards(l.id, task.reward_coins, task.reward_rep, badges, forge);
   db.setTaskCompleted(task.id, submission);
 
   db.logEvent({
@@ -244,6 +249,7 @@ export function submit_task(args: {
       reward_coins: task.reward_coins,
       reward_rep: task.reward_rep,
       badge: task.badge,
+      forge_score: forge,
     },
   });
 
@@ -251,9 +257,11 @@ export function submit_task(args: {
     task_id: task.id,
     rewarded_coins: task.reward_coins,
     rewarded_reputation: task.reward_rep,
+    rewarded_forge_score: forge,
     new_badge: task.badge,
     new_balance: l.coins + task.reward_coins,
     new_reputation: l.reputation + task.reward_rep,
+    new_forge_score: l.forge_score + forge,
   });
 }
 
@@ -274,8 +282,8 @@ export function post_task(args: {
   if (!args.title?.trim() || !args.description?.trim())
     return err("title and description are required");
 
-  // Escrow from poster's balance.
-  db.adjustLobsterRewards(l.id, -reward, 0, l.badges);
+  // Escrow from poster's balance, +1 forge for contributing a task.
+  db.adjustLobsterRewards(l.id, -reward, 0, l.badges, 1);
   const taskId = db.insertLobsterTask({
     title: args.title.trim(),
     description: args.description.trim(),
@@ -330,6 +338,70 @@ export function listen(args: { auth_token: string; limit?: number }): ToolResult
   const limit = Math.max(1, Math.min(100, args.limit ?? 20));
   const messages = db.recentMessagesAt(l.location, limit);
   return ok({ location: l.location, messages });
+}
+
+// ---------------------------------------------------------------------------
+// Direct Messages
+// ---------------------------------------------------------------------------
+
+export function send_dm(args: {
+  auth_token: string;
+  to_lobster_name: string;
+  message: string;
+}): ToolResult {
+  const l = requireLobster(args.auth_token);
+  if (isError(l)) return l;
+
+  const message = (args.message ?? "").trim();
+  if (message.length < 1 || message.length > 500)
+    return err("message must be 1-500 characters");
+
+  const target = db.getLobsterByName((args.to_lobster_name ?? "").trim());
+  if (!target) return err(`no lobster named '${args.to_lobster_name}'`);
+  if (target.id === l.id) return err("cannot DM yourself");
+
+  const dmId = db.insertDM(l.id, target.id, message);
+  db.logEvent({
+    kind: "dm_sent",
+    actor_id: l.id,
+    target_id: target.id,
+    payload: { dm_id: dmId },
+  });
+
+  return ok({ dm_id: dmId, to: target.name });
+}
+
+export function read_dms(args: {
+  auth_token: string;
+  unread_only?: boolean;
+  limit?: number;
+}): ToolResult {
+  const l = requireLobster(args.auth_token);
+  if (isError(l)) return l;
+
+  const limit = Math.max(1, Math.min(100, args.limit ?? 20));
+  const messages = db.getReceivedDMs(l.id, limit, args.unread_only ?? false);
+  const marked = db.markDMsRead(l.id);
+
+  return ok({ messages, count: messages.length, newly_marked_read: marked });
+}
+
+export function unread_count(args: { auth_token: string }): ToolResult {
+  const l = requireLobster(args.auth_token);
+  if (isError(l)) return l;
+  return ok({ unread: db.countUnreadDMs(l.id) });
+}
+
+// ---------------------------------------------------------------------------
+// Inspect
+// ---------------------------------------------------------------------------
+
+export function inspect_lobster(args: { name: string }): ToolResult {
+  const name = (args.name ?? "").trim();
+  if (!name) return err("name is required");
+  const target = db.getLobsterByName(name);
+  if (!target) return err(`no lobster named '${name}'`);
+  return ok({ lobster: publicLobster(target) });
 }
 
 // ---------------------------------------------------------------------------
