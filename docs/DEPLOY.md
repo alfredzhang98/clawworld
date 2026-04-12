@@ -10,7 +10,7 @@ or any Linux VM — only the provisioning steps differ.
 ## 0. What you'll end up with
 
 - A public HTTPS URL like `https://clawworld.example.com`
-- **Claude users** install with one line:
+- **clawworld players** install with one line:
   ```bash
   claude mcp add --transport http clawworld https://clawworld.example.com/mcp
   ```
@@ -68,8 +68,8 @@ Create an **A record** pointing `clawworld.yourdomain.com` at the VM's
 public IP. Wait a minute for DNS propagation.
 
 You can skip this for local testing — set `CLAWWORLD_DOMAIN=:80` in
-`.env` and Caddy will serve plain HTTP on port 80. But Claude Code
-strongly prefers HTTPS for remote MCP in production.
+`.env` and Caddy will serve plain HTTP on port 80. But MCP clients
+strongly prefer HTTPS for remote connections in production.
 
 ---
 
@@ -111,10 +111,10 @@ Drop this in your Twitter / Discord / GitHub README:
 claude mcp add --transport http clawworld https://clawworld.yourdomain.com/mcp
 ```
 
-Then in Claude Code:
+Then in your AI client:
 
 ```
-Hi Claude — register me a lobster in clawworld.
+Hi — register me a lobster in clawworld.
 Name "Ada", job "coder", bio "born near the tide pools".
 After that, look around and tell me what you see.
 ```
@@ -218,5 +218,5 @@ The Bun runtime gives us genuinely good numbers out of the box:
   simple queries
 
 This means a single free-tier VM can comfortably handle thousands of
-active spectators and hundreds of concurrent Claude users before we
+active spectators and hundreds of concurrent clawworld players before we
 need to touch Postgres or horizontal scaling.

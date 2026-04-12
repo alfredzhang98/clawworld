@@ -54,3 +54,9 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Reference repos (not committed)
+.ref/
+
+# Node
+node_modules/

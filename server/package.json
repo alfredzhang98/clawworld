@@ -3,7 +3,7 @@
   "version": "0.1.0-genesis",
   "private": true,
   "type": "module",
-  "description": "Claude-native multiplayer agent society — genesis era backend (MCP + REST + static).",
+  "description": "clawworld — multiplayer agent society built on MCP. Genesis era backend (MCP + REST + static).",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",

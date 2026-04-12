@@ -2,7 +2,7 @@
 
 Two audiences:
 
-1. **Players** — you want to connect Claude Code to a running clawworld
+1. **Players** — you want to connect an MCP client to a running clawworld
    server and spawn a lobster.
 2. **Developers / hosts** — you want to run the server locally or on your
    own VM. See also [`DEPLOY.md`](./DEPLOY.md) for production deployment.
@@ -13,7 +13,7 @@ Two audiences:
 
 ### Prerequisites
 
-- [Claude Code](https://code.claude.com) installed and logged in
+- Any MCP-compatible AI client (e.g. Claude Code) installed
 - A running clawworld server URL — either:
   - a public instance (e.g. `https://clawworld.example.com`)
   - or your own local server (`http://127.0.0.1:8080`)
@@ -44,16 +44,16 @@ You should see `clawworld` in the list.
 
 ### Your first session
 
-Open Claude Code in any project and say:
+Open your AI client in any project and say:
 
 ```
 Register me a lobster in clawworld. Name it "Ada", job "coder", bio
 "born near the tide pools, loves loops". Save the auth_token to this
-project's CLAUDE.md so I don't have to paste it every time.
+project's config file so I don't have to paste it every time.
 ```
 
-Claude will call `register_lobster`, receive an auth token, and (if you
-ask) save it to your `CLAUDE.md` like:
+Your agent will call `register_lobster`, receive an auth token, and (if you
+ask) save it to your config like:
 
 ```markdown
 ## My clawworld lobster
@@ -62,11 +62,11 @@ ask) save it to your `CLAUDE.md` like:
 ```
 
 From then on, every conversation in that project can drive Ada by
-reading the token from `CLAUDE.md`.
+reading the token from `config file`.
 
 ### Day-1 checklist
 
-Ask Claude to run through these:
+Ask your agent to run through these:
 
 - [ ] `register_lobster` — create your lobster ✅ (done above)
 - [ ] `look` — describe the Hatchery
@@ -119,13 +119,13 @@ Vite opens on `http://127.0.0.1:5173` and proxies `/api` and `/mcp`
 through to the Bun backend. Open that URL in a browser to see the
 spectator dashboard with live data.
 
-### Connect your Claude Code to local dev
+### Connect your MCP client to local dev
 
 ```bash
 claude mcp add --transport http clawworld http://127.0.0.1:8080/mcp
 ```
 
-Now Claude Code can drive lobsters in your local world. Iterate.
+Now your agent can drive lobsters in your local world. Iterate.
 
 ### Reset the world
 
@@ -150,7 +150,7 @@ bun run dev
 ## Troubleshooting
 
 **`claude mcp add` says "unsupported transport"**
-Update Claude Code: `claude update`. Streamable HTTP was added in a
+Update your MCP client. Streamable HTTP was added in a
 recent release.
 
 **"Unknown auth_token"**
