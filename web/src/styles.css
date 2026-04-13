@@ -406,9 +406,10 @@ footer code {
   border-radius: 8px;
   overflow: hidden;
   width: 100%;
-  min-height: 600px;
+  min-height: 560px;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  position: relative;
 }
 
 .game-canvas-wrap canvas {

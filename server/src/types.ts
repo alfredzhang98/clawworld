@@ -120,7 +120,8 @@ export interface WorldEvent {
   created_at: string;
 }
 
-export interface ToolResult<T = unknown> {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface ToolResult<_T = unknown> {
   ok: boolean;
   error?: string;
   [key: string]: unknown;

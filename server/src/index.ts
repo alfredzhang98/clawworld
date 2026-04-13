@@ -124,7 +124,7 @@ app.all("/mcp", async (c) => {
   }
   // @ts-expect-error fallback: some SDK versions accept (Request): Promise<Response>
   const response = await transport.handleRequest(raw);
-  return response as Response;
+  return response as unknown as Response;
 });
 
 // Static frontend (built Vite output). We only mount if the dir exists so

@@ -246,13 +246,11 @@ describe("tools — inspect_lobster", () => {
 
 describe("tools — economy (balance, transfer, top_lobsters)", () => {
   let token1: string;
-  let token2: string;
 
   beforeAll(() => {
     const r1 = tools.register_lobster({ name: "Rich", job: "banker" });
     token1 = (r1 as any).auth_token;
-    const r2 = tools.register_lobster({ name: "Poor", job: "beggar" });
-    token2 = (r2 as any).auth_token;
+    tools.register_lobster({ name: "Poor", job: "beggar" });
   });
 
   it("balance shows coins and reputation", () => {

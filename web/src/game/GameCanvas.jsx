@@ -29,7 +29,9 @@ export default function GameCanvas() {
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width } = entry.contentRect;
-        setSize({ width: Math.floor(width), height: 600 });
+        // Give the canvas a generous height — big enough to see the map
+        const height = Math.max(560, Math.min(760, Math.floor(width * 0.6)));
+        setSize({ width: Math.floor(width), height });
       }
     });
     ro.observe(containerRef.current);
@@ -101,7 +103,7 @@ export default function GameCanvas() {
             lobsters={lobsters}
             onLobsterClick={handleLobsterClick}
             onLocationClick={handleLocationClick}
-            onClickEmpty={handleClickEmpty}
+            onEmptyClick={handleClickEmpty}
           />
         </div>
 

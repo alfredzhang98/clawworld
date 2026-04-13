@@ -5,11 +5,13 @@
 // grid, connected by grass paths. This is small enough to fit without
 // scrolling on a typical laptop, yet detailed enough to feel spatial.
 
+// World dimensions come from the ai-town map we adopted (45×32 tiles).
+// The map data lives in aitown-map.js (derived from ai-town/data/gentle.js).
 export const TILE_SIZE = 32;
-export const MAP_COLS = 80;
-export const MAP_ROWS = 60;
-export const MAP_WIDTH = MAP_COLS * TILE_SIZE;   // 2560 px
-export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;  // 1920 px
+export const MAP_COLS = 45;
+export const MAP_ROWS = 32;
+export const MAP_WIDTH = MAP_COLS * TILE_SIZE;   // 1440 px
+export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;  // 1024 px
 
 // Location layouts — each genesis location occupies a rectangular
 // area on the world map. Coordinates are in tile units, inclusive.
@@ -32,74 +34,78 @@ export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;  // 1920 px
 //    └────────────────────────────────┘
 //                  south
 
+// Location annotations — these overlay the ai-town village map.
+// Coordinates are chosen to land on interesting visual landmarks in
+// the pre-designed map. Lobsters spawn inside these zones; no rendering
+// of "rooms" on top of the map (the map already has structures).
 export const LOCATIONS = {
   square: {
     id: "square",
     label: "The Empty Square",
-    theme: "stone",           // tileset theme
-    bounds: { x: 30, y: 22, w: 20, h: 16 },  // center
+    icon: "📍",
+    bounds: { x: 20, y: 12, w: 8, h: 8 },   // center of map
   },
   hatchery: {
     id: "hatchery",
     label: "The Hatchery",
-    theme: "water",
-    bounds: { x: 30, y: 42, w: 20, h: 14 },  // south
+    icon: "🥚",
+    bounds: { x: 30, y: 22, w: 8, h: 8 },   // SE pond area
   },
   council_hall: {
     id: "council_hall",
     label: "Creation Council Hall",
-    theme: "village",
-    bounds: { x: 30, y: 4, w: 20, h: 14 },  // north
+    icon: "🏛️",
+    bounds: { x: 20, y: 2, w: 8, h: 8 },    // N building
   },
   coast: {
     id: "coast",
     label: "The Rocky Coast",
-    theme: "harbor",
-    bounds: { x: 54, y: 22, w: 22, h: 16 },  // east
+    icon: "🌊",
+    bounds: { x: 35, y: 4, w: 8, h: 10 },   // NE coast
   },
   forge_ruins: {
     id: "forge_ruins",
     label: "The Forge Ruins",
-    theme: "mountains",
-    bounds: { x: 4, y: 22, w: 22, h: 16 },  // west
+    icon: "🔥",
+    bounds: { x: 4, y: 4, w: 8, h: 10 },    // NW structure
   },
-  // Expansion locations (pre-laid-out so they appear in the right place when god agent unlocks them)
+  // Expansion locations (pre-laid-out so they appear when god agent unlocks them)
   market: {
     id: "market",
     label: "The First Market",
-    theme: "village",
-    bounds: { x: 4, y: 4, w: 18, h: 14 },  // NW
+    icon: "🏪",
+    bounds: { x: 4, y: 16, w: 8, h: 8 },    // W
   },
   library: {
     id: "library",
     label: "Tide Pool Library",
-    theme: "forest",
-    bounds: { x: 58, y: 4, w: 18, h: 14 },  // NE
+    icon: "📚",
+    bounds: { x: 34, y: 16, w: 8, h: 6 },   // E
   },
   docks: {
     id: "docks",
     label: "The Docks",
-    theme: "harbor",
-    bounds: { x: 58, y: 42, w: 18, h: 14 },  // SE
+    icon: "⛵",
+    bounds: { x: 34, y: 24, w: 10, h: 6 },  // SE
   },
   workshop: {
     id: "workshop",
     label: "The Workshop",
-    theme: "mountains",
-    bounds: { x: 4, y: 42, w: 18, h: 14 },  // SW
+    icon: "🔨",
+    bounds: { x: 4, y: 24, w: 8, h: 6 },    // SW
   },
   garden: {
     id: "garden",
     label: "The Kelp Garden",
-    theme: "forest",
-    bounds: { x: 24, y: 44, w: 10, h: 12 },  // between hatchery + SW
+    icon: "🌿",
+    bounds: { x: 14, y: 22, w: 8, h: 8 },   // S-center
   },
-  // The void (banned lobsters go here — far off-screen)
+  // The void (banned lobsters go here — far off-screen top-left)
   void: {
     id: "void",
     label: "The Void",
-    theme: "dark",
-    bounds: { x: 0, y: 0, w: 4, h: 4 },  // hidden corner
+    icon: "⚫",
+    bounds: { x: 0, y: 0, w: 2, h: 2 },
   },
 };
 
