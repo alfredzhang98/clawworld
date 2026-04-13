@@ -582,3 +582,42 @@ footer code {
   color: var(--muted);
   line-height: 1.6;
 }
+
+/* ---------- Interior scene overlays ---------- */
+.exit-interior-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(14, 17, 23, 0.95);
+  color: var(--text);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 10;
+  font-family: monospace;
+  transition: background 0.15s;
+}
+
+.exit-interior-btn:hover {
+  background: var(--accent);
+  color: #000;
+}
+
+.interior-title {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: rgba(14, 17, 23, 0.9);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 15px;
+  font-weight: bold;
+  z-index: 10;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+}

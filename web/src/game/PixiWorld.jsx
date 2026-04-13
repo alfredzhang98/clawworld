@@ -1,35 +1,35 @@
 // PixiWorld — top-level Pixi scene for clawworld.
 //
+// Handles two scene types:
+//   - "outer": the 80x60 hand-built outer map with 5 creation locations
+//   - "interior:<id>": a 15x12 interior sub-map for that location
+//
 // Structure:
 //   <Stage>
-//     <PixiGameInner>            — uses useApp() to get app handle
-//       <PixiViewport app={...}> — pan/zoom/pinch wrapper
-//         <PixiStaticMap/>       — ai-town's tile-based village
-//         <LocationAnchors/>     — floating labels for 5 creation sites
-//         <LobsterEntities/>     — procedurally-generated lobster sprites
+//     <PixiGameInner useApp>
+//       <PixiViewport app={app}>
+//         <PixiStaticMap map={currentMap}/>
+//         <LocationClickOverlays/>  (outer only — invisible click targets on buildings)
+//         <LocationLabels/>          (outer only)
+//         <LobsterEntities/>         (filtered by sceneKey)
 //       </PixiViewport>
 //     </PixiGameInner>
 //   </Stage>
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import * as PIXI from "pixi.js";
 import { Stage, Container, Graphics, Sprite, Text, useApp } from "@pixi/react";
 
-import { worldMap } from "./worldMap.js";
-import { TILE_SIZE, LOCATIONS } from "./constants.js";
 import { getCachedLobsterSprites } from "./LobsterSpriteGen.js";
+import { OUTER_LOCATION_BOUNDS } from "./mapOuter.js";
 import PixiViewport from "./PixiViewport.jsx";
 import { PixiStaticMap } from "./PixiStaticMap.jsx";
 
-const MAP_W = worldMap.width * worldMap.tileDim;
-const MAP_H = worldMap.height * worldMap.tileDim;
-
 // -----------------------------------------------------------------------
-// Lobster entity — converts generated canvas frames to Pixi textures
-// and animates the walk cycle.
+// LobsterEntity — uses the procedural sprite atlas from LobsterSpriteGen
 // -----------------------------------------------------------------------
 
-function LobsterEntity({ lobster, onClick }) {
+function LobsterEntity({ lobster, tileDim, onClick, xOffset = 0, yOffset = 0 }) {
   const sprites = useMemo(
     () => getCachedLobsterSprites(lobster),
     [lobster.name, lobster.id],
@@ -48,21 +48,13 @@ function LobsterEntity({ lobster, onClick }) {
       left: toTextures(sprites.left),
       right: toTextures(sprites.right),
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sprites]);
 
-  // Walk cycle ticker
   const [frame, setFrame] = useState(0);
   useEffect(() => {
     const iv = setInterval(() => setFrame((f) => (f + 1) % 3), 220);
     return () => clearInterval(iv);
   }, []);
-
-  // Position — spawn inside the assigned location
-  const spot = useMemo(
-    () => locationSpot(lobster.location, lobster.id),
-    [lobster.location, lobster.id],
-  );
 
   const direction = "down";
   const texture = textures[direction][frame];
@@ -75,11 +67,11 @@ function LobsterEntity({ lobster, onClick }) {
       : "#ffffff";
 
   return (
-    <Container x={spot.x} y={spot.y}>
+    <Container x={xOffset} y={yOffset}>
       <Sprite
         texture={texture}
         anchor={{ x: 0.5, y: 0.85 }}
-        scale={{ x: 2.2, y: 2.2 }}
+        scale={{ x: 2.0, y: 2.0 }}
         eventMode="static"
         cursor="pointer"
         pointertap={(e) => {
@@ -91,7 +83,7 @@ function LobsterEntity({ lobster, onClick }) {
         text={lobster.name}
         anchor={{ x: 0.5, y: 1 }}
         x={0}
-        y={-48}
+        y={-40}
         style={
           new PIXI.TextStyle({
             fontFamily: "monospace",
@@ -107,164 +99,119 @@ function LobsterEntity({ lobster, onClick }) {
   );
 }
 
-function locationSpot(locationId, lobsterId) {
-  const loc = LOCATIONS[locationId] ?? LOCATIONS.square;
-  const { x, y, w, h } = loc.bounds;
-  // Deterministic offset inside the location from lobsterId
+// Place a lobster deterministically inside a rectangle
+function placeInBounds(bounds, lobsterId, tileDim) {
+  const { x, y, w, h } = bounds;
   const hash = ((lobsterId || 1) * 2654435761) >>> 0;
   const dx = 1 + (hash % Math.max(1, w - 2));
   const dy = 1 + ((hash >>> 8) % Math.max(1, h - 2));
-  return { x: (x + dx) * TILE_SIZE, y: (y + dy) * TILE_SIZE };
+  return { x: (x + dx) * tileDim, y: (y + dy) * tileDim };
 }
 
 // -----------------------------------------------------------------------
-// Floating location labels (anchored over the ai-town map)
+// LocationClickOverlay — invisible clickable rectangles over the buildings
+// on the outer map, so clicking a building enters its interior.
 // -----------------------------------------------------------------------
 
-// Colored themes per location — provides visual identity regardless of
-// what's under the zone on the base tilemap.
-const LOCATION_COLORS = {
-  square:       { primary: 0xd4a574, secondary: 0x8b5a2b, glow: 0xfff4c2 },
-  hatchery:     { primary: 0x4fc3f7, secondary: 0x01579b, glow: 0x81d4fa },
-  council_hall: { primary: 0x7c4dff, secondary: 0x311b92, glow: 0xb388ff },
-  coast:        { primary: 0x26a69a, secondary: 0x004d40, glow: 0x80cbc4 },
-  forge_ruins:  { primary: 0xff6f00, secondary: 0x3e2723, glow: 0xffab40 },
-  market:       { primary: 0xffb300, secondary: 0x6f4c00, glow: 0xffe082 },
-  library:      { primary: 0x66bb6a, secondary: 0x1b5e20, glow: 0xa5d6a7 },
-  docks:        { primary: 0x42a5f5, secondary: 0x0d47a1, glow: 0x90caf9 },
-  workshop:     { primary: 0xef5350, secondary: 0x4a1e1e, glow: 0xef9a9a },
-  garden:       { primary: 0x8bc34a, secondary: 0x33691e, glow: 0xc5e1a5 },
-};
-
-/**
- * LocationZone — draws a glowing rectangle with a decorative frame
- * over a location's bounds so the zone is visible even if the base
- * tilemap doesn't have a building there.
- */
-function LocationZone({ loc, onClick }) {
-  const { x, y, w, h } = loc.bounds;
-  const px = x * TILE_SIZE;
-  const py = y * TILE_SIZE;
-  const pw = w * TILE_SIZE;
-  const ph = h * TILE_SIZE;
-  const colors = LOCATION_COLORS[loc.id] ?? LOCATION_COLORS.square;
-
-  const [hovered, setHovered] = useState(false);
-
+function LocationClickOverlay({ bounds, locationId, tileDim, onEnter }) {
   const draw = useCallback(
     (g) => {
       g.clear();
-
-      // Outer soft glow
-      g.beginFill(colors.glow, hovered ? 0.35 : 0.18);
-      g.drawRoundedRect(px - 8, py - 8, pw + 16, ph + 16, 12);
-      g.endFill();
-
-      // Main fill
-      g.beginFill(colors.primary, hovered ? 0.32 : 0.22);
-      g.drawRoundedRect(px, py, pw, ph, 8);
-      g.endFill();
-
-      // Decorative frame (thick outer + thin inner)
-      g.lineStyle(4, colors.secondary, 0.95);
-      g.drawRoundedRect(px + 2, py + 2, pw - 4, ph - 4, 6);
-      g.lineStyle(2, colors.glow, 0.8);
-      g.drawRoundedRect(px + 6, py + 6, pw - 12, ph - 12, 4);
-
-      // Corner ornaments
-      const corners = [
-        [px + 6, py + 6],
-        [px + pw - 6, py + 6],
-        [px + 6, py + ph - 6],
-        [px + pw - 6, py + ph - 6],
-      ];
-      g.lineStyle(0);
-      g.beginFill(colors.glow);
-      for (const [cx, cy] of corners) {
-        g.drawCircle(cx, cy, 3);
-      }
+      // Transparent hit area (alpha 0.01 so Pixi accepts it as hittable)
+      g.beginFill(0xffffff, 0.001);
+      g.drawRect(
+        bounds.x * tileDim,
+        bounds.y * tileDim,
+        bounds.w * tileDim,
+        bounds.h * tileDim,
+      );
       g.endFill();
     },
-    [px, py, pw, ph, hovered, colors.glow, colors.primary, colors.secondary],
+    [bounds.x, bounds.y, bounds.w, bounds.h, tileDim],
   );
 
   return (
-    <Container
+    <Graphics
+      draw={draw}
       eventMode="static"
       cursor="pointer"
       pointertap={(e) => {
         e.stopPropagation();
-        onClick?.(loc.id);
+        onEnter?.(locationId);
       }}
-      pointerover={() => setHovered(true)}
-      pointerout={() => setHovered(false)}
-    >
-      <Graphics draw={draw} />
-    </Container>
-  );
-}
-
-function LocationLabel({ loc, onClick }) {
-  const px = (loc.bounds.x + loc.bounds.w / 2) * TILE_SIZE;
-  const py = (loc.bounds.y - 0.8) * TILE_SIZE;
-  return (
-    <Container
-      x={px}
-      y={py}
-      eventMode="static"
-      cursor="pointer"
-      pointertap={(e) => {
-        e.stopPropagation();
-        onClick?.(loc.id);
-      }}
-    >
-      <Text
-        text={`${loc.icon ?? ""} ${loc.label}`}
-        anchor={{ x: 0.5, y: 1 }}
-        style={
-          new PIXI.TextStyle({
-            fontFamily: "monospace",
-            fontSize: 13,
-            fontWeight: "bold",
-            fill: "#ffffff",
-            stroke: "#000000",
-            strokeThickness: 4,
-          })
-        }
-      />
-    </Container>
+    />
   );
 }
 
 // -----------------------------------------------------------------------
-// Inner game component — runs inside <Stage> so useApp() works
+// LocationLabel — floating text over each outer-map location
+// -----------------------------------------------------------------------
+
+function LocationLabel({ bounds, label, tileDim }) {
+  const px = (bounds.x + bounds.w / 2) * tileDim;
+  const py = (bounds.y - 0.2) * tileDim;
+  return (
+    <Text
+      text={label}
+      anchor={{ x: 0.5, y: 1 }}
+      x={px}
+      y={py}
+      style={
+        new PIXI.TextStyle({
+          fontFamily: "monospace",
+          fontSize: 14,
+          fontWeight: "bold",
+          fill: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 4,
+        })
+      }
+    />
+  );
+}
+
+// -----------------------------------------------------------------------
+// Inner game component — inside <Stage> so useApp() works
 // -----------------------------------------------------------------------
 
 function PixiGameInner({
+  map,
+  sceneKey,
   width,
   height,
   lobsters,
   onLobsterClick,
-  onLocationClick,
+  onEnterInterior,
   onEmptyClick,
 }) {
   const pixiApp = useApp();
   const viewportRef = useRef(undefined);
 
-  // Center camera on the map's middle on first mount
-  useEffect(() => {
-    if (!viewportRef.current) return;
-    const vp = viewportRef.current;
-    vp.moveCenter(MAP_W / 2, MAP_H / 2);
-    vp.setZoom(0.8, true);
-  }, []);
+  const MAP_W = map.width * map.tileDim;
+  const MAP_H = map.height * map.tileDim;
 
-  const handleMapPointerTap = (e) => {
-    // Clicking the map background (not a lobster/label) dismisses panels
-    if (e.target === e.currentTarget) {
-      onEmptyClick?.();
-    }
-  };
+  // Center camera on the map each time map changes
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!vp) return;
+    vp.worldWidth = MAP_W;
+    vp.worldHeight = MAP_H;
+    vp.moveCenter(MAP_W / 2, MAP_H / 2);
+    // Fit the map to the visible area (with some padding)
+    const fitScale = Math.min(
+      (width - 40) / MAP_W,
+      (height - 40) / MAP_H,
+    );
+    vp.setZoom(Math.max(0.4, fitScale), true);
+  }, [map, MAP_W, MAP_H, width, height]);
+
+  const isOuter = sceneKey === "outer";
+
+  // Filter lobsters by current scene (default to outer for lobsters without a field)
+  const visibleLobsters = lobsters.filter((l) => {
+    const ls = l.current_scene ?? "outer";
+    return ls === sceneKey;
+  });
 
   return (
     <PixiViewport
@@ -275,40 +222,78 @@ function PixiGameInner({
       worldWidth={MAP_W}
       worldHeight={MAP_H}
     >
-      <PixiStaticMap map={worldMap} pointertap={handleMapPointerTap} />
-      {Object.values(LOCATIONS)
-        .filter((l) => l.id !== "void")
-        .map((loc) => (
-          <LocationZone key={`zone-${loc.id}`} loc={loc} onClick={onLocationClick} />
+      <PixiStaticMap
+        map={map}
+        pointertap={(e) => {
+          if (e.target === e.currentTarget) onEmptyClick?.();
+        }}
+      />
+
+      {isOuter &&
+        Object.entries(OUTER_LOCATION_BOUNDS).map(([id, b]) => (
+          <LocationClickOverlay
+            key={`hit-${id}`}
+            bounds={b}
+            locationId={id}
+            tileDim={map.tileDim}
+            onEnter={onEnterInterior}
+          />
         ))}
-      {Object.values(LOCATIONS)
-        .filter((l) => l.id !== "void")
-        .map((loc) => (
-          <LocationLabel key={loc.id} loc={loc} onClick={onLocationClick} />
+
+      {isOuter &&
+        Object.entries(OUTER_LOCATION_BOUNDS).map(([id, b]) => (
+          <LocationLabel
+            key={`label-${id}`}
+            bounds={b}
+            label={b.label}
+            tileDim={map.tileDim}
+          />
         ))}
-      {lobsters.map((lobster) => (
-        <LobsterEntity
-          key={`${lobster.name}-${lobster.id}`}
-          lobster={lobster}
-          onClick={onLobsterClick}
-        />
-      ))}
+
+      {visibleLobsters.map((lobster) => {
+        let spot;
+        if (isOuter) {
+          // Outer: use the lobster's location bounds
+          const bounds = OUTER_LOCATION_BOUNDS[lobster.location];
+          spot = bounds
+            ? placeInBounds(bounds, lobster.id, map.tileDim)
+            : { x: MAP_W / 2, y: MAP_H / 2 };
+        } else {
+          // Interior: put lobster near the center of the room
+          spot = {
+            x: (map.width / 2 + ((lobster.id * 37) % 3) - 1) * map.tileDim,
+            y: (map.height / 2 + ((lobster.id * 53) % 3) - 1) * map.tileDim,
+          };
+        }
+        return (
+          <Container key={`${lobster.name}-${lobster.id}`} x={spot.x} y={spot.y}>
+            <LobsterEntity
+              lobster={lobster}
+              tileDim={map.tileDim}
+              onClick={onLobsterClick}
+            />
+          </Container>
+        );
+      })}
     </PixiViewport>
   );
 }
 
 // -----------------------------------------------------------------------
-// Top-level PixiWorld (only sets up <Stage>)
+// Top-level PixiWorld
 // -----------------------------------------------------------------------
 
 export default function PixiWorld({
+  map,
+  sceneKey,
   width,
   height,
   lobsters = [],
   onLobsterClick,
-  onLocationClick,
+  onEnterInterior,
   onEmptyClick,
 }) {
+  if (!map) return null;
   return (
     <Stage
       width={width}
@@ -321,11 +306,13 @@ export default function PixiWorld({
       }}
     >
       <PixiGameInner
+        map={map}
+        sceneKey={sceneKey}
         width={width}
         height={height}
         lobsters={lobsters}
         onLobsterClick={onLobsterClick}
-        onLocationClick={onLocationClick}
+        onEnterInterior={onEnterInterior}
         onEmptyClick={onEmptyClick}
       />
     </Stage>

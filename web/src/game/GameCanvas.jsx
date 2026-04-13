@@ -1,16 +1,15 @@
-// GameCanvas — the React wrapper around PixiWorld.
+// GameCanvas — React wrapper around PixiWorld.
 //
-// Lifecycle:
-//   - Polls /api/lobsters/top + /api/world/stats every 3 seconds
-//   - Passes lobster array to PixiWorld for rendering
-//   - Manages side panels (lobster info, location info)
-//
-// Pixi lifecycle is handled inside PixiWorld via @pixi/react; we don't
-// need manual mount/destroy here like we did with Phaser.
+// - Polls /api/lobsters/top + /api/world/stats every 3 seconds
+// - Manages scene state via useSceneManager
+// - Side panels: live stats, selected lobster, selected location info
+// - Return-to-world button overlay when in an interior
 
 import { useEffect, useRef, useState } from "react";
 import PixiWorld from "./PixiWorld.jsx";
 import { api } from "../api.js";
+import { useSceneManager } from "./sceneManager.js";
+import { OUTER_LOCATION_BOUNDS } from "./mapOuter.js";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -23,14 +22,16 @@ export default function GameCanvas() {
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [error, setError] = useState(null);
 
-  // Track container size for Pixi stage
+  const { scene, sceneKey, currentMap, enterInterior, exitToOuter } =
+    useSceneManager();
+
+  // Track container size for the Pixi stage
   useEffect(() => {
     if (!containerRef.current) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width } = entry.contentRect;
-        // Give the canvas a generous height — big enough to see the map
-        const height = Math.max(560, Math.min(760, Math.floor(width * 0.6)));
+        const height = Math.max(560, Math.min(760, Math.floor(width * 0.55)));
         setSize({ width: Math.floor(width), height });
       }
     });
@@ -41,7 +42,6 @@ export default function GameCanvas() {
   // Poll the REST API
   useEffect(() => {
     let alive = true;
-
     const tick = async () => {
       try {
         const [top, stats] = await Promise.all([
@@ -56,7 +56,6 @@ export default function GameCanvas() {
         if (alive) setError(e.message);
       }
     };
-
     tick();
     const interval = setInterval(tick, POLL_INTERVAL_MS);
     return () => {
@@ -70,12 +69,13 @@ export default function GameCanvas() {
     setSelectedLocation(null);
   };
 
-  const handleLocationClick = (locationId) => {
-    setSelectedLocation(locationId);
+  const handleEnterInterior = (locationId) => {
+    enterInterior(locationId);
     setSelectedLobster(null);
+    setSelectedLocation(locationId);
   };
 
-  const handleClickEmpty = () => {
+  const handleEmptyClick = () => {
     setSelectedLobster(null);
     setSelectedLocation(null);
   };
@@ -85,7 +85,7 @@ export default function GameCanvas() {
       <div className="game-header">
         <h2>🌍 Live World</h2>
         <p className="hint">
-          Drag to pan · Wheel to zoom · Click a lobster or a location for details
+          Drag to pan · Wheel to zoom · Click a building to enter · Click a lobster for details
         </p>
       </div>
 
@@ -98,13 +98,25 @@ export default function GameCanvas() {
       <div className="game-layout">
         <div className="game-canvas-wrap" ref={containerRef}>
           <PixiWorld
+            map={currentMap}
+            sceneKey={sceneKey}
             width={size.width}
             height={size.height}
             lobsters={lobsters}
             onLobsterClick={handleLobsterClick}
-            onLocationClick={handleLocationClick}
-            onEmptyClick={handleClickEmpty}
+            onEnterInterior={handleEnterInterior}
+            onEmptyClick={handleEmptyClick}
           />
+          {scene.type === "interior" && (
+            <button className="exit-interior-btn" onClick={exitToOuter}>
+              ← Return to world
+            </button>
+          )}
+          {scene.type === "interior" && (
+            <div className="interior-title">
+              {OUTER_LOCATION_BOUNDS[scene.locationId]?.label ?? scene.locationId}
+            </div>
+          )}
         </div>
 
         <aside className="game-sidebar">
@@ -152,12 +164,11 @@ export default function GameCanvas() {
             <div className="game-hint-box">
               <h3>Tip</h3>
               <p>
-                Click a lobster to see its profile. Click a location to see
-                its open tasks. Drag the map with your mouse; scroll to zoom.
+                Click a building on the map to enter its interior. Click a
+                lobster to see its profile. Drag with your mouse; scroll to zoom.
               </p>
               <p style={{ marginTop: 10 }}>
-                The world updates every 3 seconds. Lobsters registered via
-                MCP will appear here automatically.
+                New lobsters appear automatically as people register via MCP.
               </p>
             </div>
           )}
@@ -274,9 +285,7 @@ function LocationPanel({ locationId, onClose }) {
         <span>🦞 {loc?.lobsters_here ?? 0} here</span>
         {loc?.exits?.length > 0 && <span>→ {loc.exits.join(", ")}</span>}
       </div>
-      <h4 style={{ marginTop: 16, marginBottom: 8 }}>
-        Open tasks ({tasks.length})
-      </h4>
+      <h4 style={{ marginTop: 16, marginBottom: 8 }}>Open tasks ({tasks.length})</h4>
       {tasks.length === 0 && <p className="muted">None right now.</p>}
       {tasks.map((t) => (
         <div className="mini-task" key={t.id}>
