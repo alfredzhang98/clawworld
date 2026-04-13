@@ -373,3 +373,211 @@ footer code {
   padding: 2px 6px;
   border-radius: 4px;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Game World (Phaser canvas)                                             */
+/* ---------------------------------------------------------------------- */
+
+.game-world {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-header h2 {
+  margin: 0 0 4px 0;
+}
+
+.game-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.game-canvas-wrap {
+  background: #0a0d12;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100%;
+  min-height: 600px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.game-canvas-wrap canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.game-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-stats {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.game-stats h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+}
+
+.game-panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.game-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.game-panel-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 6px;
+}
+
+.close-btn:hover {
+  color: var(--text);
+}
+
+.compact-dl {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 4px 12px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.compact-dl dt {
+  color: var(--muted);
+}
+
+.compact-dl dd {
+  margin: 0;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  background: var(--panel-alt);
+  color: var(--muted);
+}
+
+.role-badge.role-god {
+  background: #fff5d6;
+  color: #8b6b00;
+}
+
+.role-badge.role-admin {
+  background: #d1f2ff;
+  color: #0a6e8c;
+}
+
+.stat-bars {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.stat-bar-track {
+  background: var(--panel-alt);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  transition: width 0.3s;
+}
+
+.mini-task {
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.mini-task:last-child {
+  border-bottom: none;
+}
+
+.mini-task .meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.game-hint-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.game-hint-box h3 {
+  margin: 0 0 8px 0;
+  font-size: 13px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.game-hint-box p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+}

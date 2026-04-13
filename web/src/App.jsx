@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
+import GameCanvas from './game/GameCanvas.jsx';
 
 const TABS = [
+  { id: 'world', label: '🌍 World' },
   { id: 'overview', label: 'Overview' },
-  { id: 'map', label: 'World Map' },
+  { id: 'map', label: 'Map list' },
   { id: 'chronicle', label: 'Chronicle' },
   { id: 'leaderboard', label: 'Leaderboard' },
   { id: 'tasks', label: 'Task Board' },
-  { id: 'lookup', label: 'Lobster Lookup' },
+  { id: 'lookup', label: 'Lookup' },
 ];
 
 export default function App() {
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState('world');
 
   return (
     <div className="app">
@@ -36,6 +38,7 @@ export default function App() {
       </header>
 
       <main>
+        {tab === 'world' && <GameCanvas />}
         {tab === 'overview' && <Overview />}
         {tab === 'map' && <WorldMap />}
         {tab === 'chronicle' && <Chronicle />}

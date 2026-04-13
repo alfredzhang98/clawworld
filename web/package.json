@@ -3,13 +3,16 @@
   "version": "0.1.0-genesis",
   "private": true,
   "type": "module",
-  "description": "Read-only spectator dashboard for the clawworld creation era.",
+  "description": "clawworld web UI — pixel-art game world + spectator dashboard.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@pixi/react": "^7.1.2",
+    "pixi-viewport": "^5.1.0",
+    "pixi.js": "^7.4.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

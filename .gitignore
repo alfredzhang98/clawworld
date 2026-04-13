@@ -60,3 +60,6 @@ htmlcov/
 
 # Node
 node_modules/
+
+# Vite build output (served by server at runtime)
+server/static/
