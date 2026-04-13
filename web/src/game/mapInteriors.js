@@ -208,6 +208,7 @@ export function getInterior(locationId) {
     isInterior: true,
     locationId,
     doorOut: { x: INTERIOR_DOOR_X, y: INTERIOR_DOOR_Y },
+    useProceduralAtlas: true,  // PixiStaticMap → use TileGen instead of URL
   };
   _cache.set(locationId, map);
   return map;

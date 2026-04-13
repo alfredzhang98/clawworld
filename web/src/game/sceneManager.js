@@ -9,8 +9,12 @@
 // Scene is persisted to sessionStorage so page refreshes preserve the view.
 
 import { useCallback, useEffect, useState } from "react";
-import { getOuterMap } from "./mapOuter.js";
+import { outerWorldMap } from "./clawworldMap.js";
 import { getInterior, getInteriorLocationIds } from "./mapInteriors.js";
+
+function getOuterMap() {
+  return outerWorldMap;
+}
 
 const STORAGE_KEY = "clawworld_current_scene";
 

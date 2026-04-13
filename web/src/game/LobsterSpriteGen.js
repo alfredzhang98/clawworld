@@ -526,3 +526,80 @@ export function getCachedLobsterSprites(lobster) {
 export function clearSpriteCache() {
   spriteCache.clear();
 }
+
+// ---------- 96×128 sheet export (matches genagents-cn format) -------------
+//
+// Layout:
+//   row 0 (y=0):  down-walk frame 0, 1, 2  (x = 0, 32, 64)
+//   row 1 (y=32): left-walk  frame 0, 1, 2
+//   row 2 (y=64): right-walk frame 0, 1, 2
+//   row 3 (y=96): up-walk    frame 0, 1, 2
+//
+// The atlas JSON we copied from genagents-cn references additional
+// "frame.003" entries that re-use frame.001 (two-step loop convention),
+// so any consumer of the standard sprite.json works against this sheet.
+
+/**
+ * Generate a single 96×128 sprite sheet for a lobster, with all 12 frames
+ * packed in the genagents-cn layout. Returns a single canvas.
+ *
+ * @param {{name: string, id: number, role?: string}} lobster
+ * @returns {HTMLCanvasElement}
+ */
+export function generateLobsterSheet(lobster) {
+  const sprites = generateLobsterSprites(lobster);
+  const sheet = document.createElement("canvas");
+  sheet.width = 96;
+  sheet.height = 128;
+  const ctx = sheet.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+
+  const directions = ["down", "left", "right", "up"];
+  directions.forEach((dir, rowIdx) => {
+    sprites[dir].forEach((frameCanvas, colIdx) => {
+      ctx.drawImage(frameCanvas, colIdx * 32, rowIdx * 32);
+    });
+  });
+
+  return sheet;
+}
+
+/**
+ * Build a per-lobster atlas JSON object compatible with the standard
+ * sprite.json shape (down-walk.000..003, idle frames, etc.). The 003
+ * frames reuse 001 to make the walk look two-step.
+ */
+export function buildLobsterAtlasJson(filenamePrefix = "") {
+  const directions = ["down", "left", "right", "up"];
+  const frames = [];
+  directions.forEach((dir, rowIdx) => {
+    const y = rowIdx * 32;
+    // frame.000, .001, .002 — actual unique frames
+    for (let f = 0; f < 3; f++) {
+      frames.push({
+        filename: `${filenamePrefix}${dir}-walk.00${f}`,
+        frame: { w: 32, h: 32, x: f * 32, y },
+        anchor: { x: 0.5, y: 0.5 },
+      });
+    }
+    // frame.003 = duplicate of .001 (two-step loop)
+    frames.push({
+      filename: `${filenamePrefix}${dir}-walk.003`,
+      frame: { w: 32, h: 32, x: 32, y },
+      anchor: { x: 0.5, y: 0.5 },
+    });
+    // idle frame (same as .001 / mid-step)
+    frames.push({
+      filename: `${filenamePrefix}${dir}`,
+      frame: { w: 32, h: 32, x: 32, y },
+      anchor: { x: 0.5, y: 0.5 },
+    });
+  });
+  return {
+    frames,
+    meta: {
+      description: "clawworld procedural lobster atlas",
+      version: "1.0",
+    },
+  };
+}

@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import PixiWorld from "./PixiWorld.jsx";
 import { api } from "../api.js";
 import { useSceneManager } from "./sceneManager.js";
-import { OUTER_LOCATION_BOUNDS } from "./mapOuter.js";
+import { CLAWWORLD_LOCATIONS } from "./clawworldMap.js";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -114,7 +114,7 @@ export default function GameCanvas() {
           )}
           {scene.type === "interior" && (
             <div className="interior-title">
-              {OUTER_LOCATION_BOUNDS[scene.locationId]?.label ?? scene.locationId}
+              {CLAWWORLD_LOCATIONS[scene.locationId]?.label ?? scene.locationId}
             </div>
           )}
         </div>

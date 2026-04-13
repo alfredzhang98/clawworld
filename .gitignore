@@ -64,6 +64,9 @@ node_modules/
 # Vite build output (served by server at runtime)
 server/static/
 
+# Asset staging area (for manual review only; not shipped in production)
+assets-staging/
+
 # Claude Code — commit settings.json + hooks/ but not local preferences
 # and not runtime logs
 .claude/settings.local.json
